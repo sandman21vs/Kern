@@ -17,6 +17,10 @@
 #include <bsp/pmic.h>
 #include <esp_log.h>
 
+#if CONFIG_KERN_NFC
+#include "nfc/nfc_tap_page.h"
+#endif
+
 static const char *TAG = "SESSION_LOCK";
 
 static bool device_locked = false;
@@ -110,6 +114,12 @@ void session_lock_now(void) {
   worker_task_wait();
   session_cleanup_run();
   wallet_unload();
+#if CONFIG_KERN_NFC
+  // The tap page owns the RF field and a polling timer that outlives
+  // lv_obj_clean. A locked device must not be left with a live antenna
+  // answering cards.
+  nfc_tap_page_destroy();
+#endif
   lv_obj_clean(lv_screen_active());
   ui_display_scrub();
   screensaver_create(lv_screen_active(), lock_dismissed_cb,
