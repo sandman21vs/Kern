@@ -89,7 +89,25 @@ Classic sectors are authenticated with the factory key A
 (`FF FF FF FF FF FF`). The protection is the KEF password, not the sector key —
 the card stays readable by any reader, and what a reader finds is ciphertext.
 
-Any other SAK is treated as an empty field. A KEF-wrapped 24-word seed is well
+Any other SAK is treated as an empty field.
+### An NDEF-formatted tag has to be wiped first
+
+Sectors are authenticated with the factory key A (`FF FF FF FF FF FF`). A tag
+that has been NDEF-formatted no longer uses it: the NFC Forum mapping puts
+`A0 A1 A2 A3 A4 A5` on the MAD sector and `D3 F7 D3 F7 D3 F7` on the data
+sectors, so authentication fails and the tag reads as if it held no backup.
+
+This is not hypothetical — an off-the-shelf NFC ring arrived NDEF-formatted
+with a Lightning address on it and behaved exactly that way. Erasing it with
+any tag tool (NFC Tools' format/erase, for one) restores the factory keys and
+it works immediately afterwards. Note that this destroys whatever NDEF content
+the tag shipped with.
+
+In the serial log the two cases are distinguishable: a key failure logs
+`Header read failed: ESP_ERR_TIMEOUT`, while a readable tag with no Kern record
+logs `Header rejected: not a Kern record`. The on-screen message is the same
+for both, which is a rough edge worth knowing about.
+ A KEF-wrapped 24-word seed is well
 under 100 bytes, so every supported tag has room to spare.
 
 ---
