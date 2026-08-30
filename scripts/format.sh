@@ -22,6 +22,7 @@ DIRS=(
     "$REPO_ROOT/components/cUR"
     "$REPO_ROOT/components/deflate_codec"
     "$REPO_ROOT/components/k_quirc"
+    "$REPO_ROOT/components/nfc"
     "$REPO_ROOT/components/sd_card"
     "$REPO_ROOT/components/video"
     "$REPO_ROOT/components/wave_4b"

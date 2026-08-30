@@ -1,0 +1,31 @@
+menu "NFC Card Storage"
+
+    config KERN_NFC
+        bool "Enable NFC card storage (M5Stack RFID Unit 2 / WS1850S)"
+        default y
+        help
+            Compile support for keeping KEF-encrypted mnemonics on NFC cards,
+            read and written through a WS1850S module on the board's I2C bus.
+
+            Building it in does not turn it on: the feature stays inert until
+            it is also enabled at runtime under Settings -> NFC, which is off
+            by default. The RF field is energized only while the card page is
+            open.
+
+    config KERN_NFC_I2C_ADDR
+        hex "WS1850S I2C address"
+        default 0x28
+        depends on KERN_NFC
+        help
+            7-bit I2C address of the reader. 0x28 is the M5Stack RFID Unit 2
+            factory default.
+
+    config KERN_NFC_I2C_TIMEOUT_MS
+        int "I2C transaction timeout (ms)"
+        default 100
+        depends on KERN_NFC
+        help
+            Per-transfer timeout for reader register access. Bounds every
+            blocking call so an absent or wedged module cannot stall the UI.
+
+endmenu

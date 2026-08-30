@@ -31,6 +31,7 @@ simulator/sim_data/
 components/bbqr/test/test_bbqr
 components/bbqr/test/test_base32
 components/deflate_codec/test/test_deflate_codec
+components/nfc/test/test_nfc_record
 main/qr/test/test_parser
 main/core/test/test_derivation_path
 main/core/test/test_ss_whitelist_parse

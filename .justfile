@@ -52,6 +52,7 @@ clean:
     rm -fRd .cache/
     rm -rf simulator/build
     make -C components/bbqr/test clean
+    make -C components/nfc/test clean
     make -C main/qr/test clean
     make -C main/core/test clean
 

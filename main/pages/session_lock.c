@@ -15,6 +15,10 @@
 #include <bsp/pmic.h>
 #include <esp_log.h>
 
+#if CONFIG_KERN_NFC
+#include "nfc/nfc_tap_page.h"
+#endif
+
 static const char *TAG = "SESSION_LOCK";
 
 static bool device_locked = false;
@@ -120,6 +124,12 @@ static void session_expired_handler(void) {
   // owning page's teardown, and a late frame would write to freed widgets.
   if (app_video_is_streaming())
     app_video_stop();
+#if CONFIG_KERN_NFC
+  // Same reason, and one more: the tap page owns the RF field and a polling
+  // timer that outlives lv_obj_clean. A locked device must not be left with a
+  // live antenna answering cards.
+  nfc_tap_page_destroy();
+#endif
   lv_obj_clean(lv_screen_active());
   screensaver_create(lv_screen_active(), lock_dismissed_cb,
                      pin_is_configured() ? "Locked" : "Unloaded");

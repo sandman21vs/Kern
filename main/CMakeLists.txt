@@ -33,7 +33,7 @@ idf_component_register(
     SRCS ${SOURCES}
     INCLUDE_DIRS .
     PRIV_REQUIRES lvgl ${TOUCH_DRIVER} k_quirc esp_timer wave_4b wave_35 wave_5 wave_43
-                  crowpanel wave_7b libwally-core cUR sd_card bbqr deflate_codec video spiffs
+                  crowpanel wave_7b libwally-core cUR sd_card nfc bbqr deflate_codec video spiffs
                   nvs_flash efuse esp_hw_support esp_app_format mbedtls
                   esp_driver_ppa app_update bootloader_support
 )

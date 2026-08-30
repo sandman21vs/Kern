@@ -17,6 +17,11 @@
 #include <lvgl.h>
 #include <stdlib.h>
 
+#if CONFIG_KERN_NFC
+#include "../../core/settings.h"
+#include "../nfc/nfc_load_mnemonic.h"
+#endif
+
 static ui_menu_t *load_menu = NULL;
 static lv_obj_t *load_menu_screen = NULL;
 static ui_menu_t *manual_method_menu = NULL;
@@ -205,6 +210,27 @@ static void from_sd_cb(void) {
   load_storage_page_show();
 }
 
+#if CONFIG_KERN_NFC
+static void return_from_nfc_cb(void) {
+  nfc_load_mnemonic_page_destroy();
+  load_menu_page_show();
+}
+
+static void success_from_nfc_cb(void) {
+  nfc_load_mnemonic_page_destroy();
+  load_menu_page_destroy();
+  home_page_create(lv_screen_active());
+  home_page_show();
+}
+
+static void from_nfc_cb(void) {
+  load_menu_page_hide();
+  nfc_load_mnemonic_page_create(lv_screen_active(), return_from_nfc_cb,
+                                success_from_nfc_cb);
+  nfc_load_mnemonic_page_show();
+}
+#endif
+
 static void back_cb(void) {
   void (*callback)(void) = return_callback;
   load_menu_page_hide();
@@ -232,6 +258,11 @@ void load_menu_page_create(lv_obj_t *parent, void (*return_cb)(void)) {
                               from_flash_cb);
   ui_menu_add_entry_with_icon(load_menu, ICON_SD_CARD, "From SD Card",
                               from_sd_cb);
+#if CONFIG_KERN_NFC
+  if (settings_get_nfc_enabled())
+    ui_menu_add_entry_with_icon(load_menu, LV_SYMBOL_WIFI, "From NFC Card",
+                                from_nfc_cb);
+#endif
   ui_menu_show(load_menu);
 }
 
