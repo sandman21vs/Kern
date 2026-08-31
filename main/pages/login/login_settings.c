@@ -13,6 +13,10 @@
 #include <bsp/display.h>
 #include <lvgl.h>
 
+#if CONFIG_KERN_NFC
+#include "nfc_settings.h"
+#endif
+
 // -- Top-level settings menu --
 static ui_menu_t *settings_menu = NULL;
 static lv_obj_t *settings_screen = NULL;
@@ -147,6 +151,21 @@ static void firmware_update_cb(void) {
   firmware_update_page_show();
 }
 
+#if CONFIG_KERN_NFC
+// ── NFC submenu ──
+
+static void nfc_return_cb(void) {
+  nfc_settings_page_destroy();
+  ui_menu_show(settings_menu);
+}
+
+static void nfc_cb(void) {
+  ui_menu_hide(settings_menu);
+  nfc_settings_page_create(lv_screen_active(), nfc_return_cb);
+  nfc_settings_page_show();
+}
+#endif
+
 // ── Category menu callbacks ──
 
 static void brightness_cb(void) { show_brightness_page(); }
@@ -174,6 +193,9 @@ void login_settings_page_create(lv_obj_t *parent, void (*return_cb)(void)) {
   ui_menu_add_entry(settings_menu, "Security", security_cb);
   ui_menu_add_entry(settings_menu, "Screen Brightness", brightness_cb);
   ui_menu_add_entry(settings_menu, "Screensaver", screensaver_cb);
+#if CONFIG_KERN_NFC
+  ui_menu_add_entry(settings_menu, "NFC", nfc_cb);
+#endif
   ui_menu_add_entry(settings_menu, "Firmware Update", firmware_update_cb);
 }
 

@@ -11,6 +11,11 @@
 #include "mnemonic_words.h"
 #include <lvgl.h>
 
+#if CONFIG_KERN_NFC
+#include "../../../core/settings.h"
+#include "../../nfc/nfc_store_mnemonic.h"
+#endif
+
 static ui_menu_t *backup_menu = NULL;
 static lv_obj_t *backup_menu_screen = NULL;
 static void (*return_callback)(void) = NULL;
@@ -78,6 +83,19 @@ static void menu_save_sd_cb(void) {
   store_mnemonic_page_show();
 }
 
+#if CONFIG_KERN_NFC
+static void return_from_nfc_store_cb(void) {
+  nfc_store_mnemonic_page_destroy();
+  backup_menu_page_show();
+}
+
+static void menu_save_nfc_cb(void) {
+  backup_menu_page_hide();
+  nfc_store_mnemonic_page_create(lv_screen_active(), return_from_nfc_store_cb);
+  nfc_store_mnemonic_page_show();
+}
+#endif
+
 /* --- Back --- */
 
 static void back_cb(void) {
@@ -105,6 +123,11 @@ void backup_menu_page_create(lv_obj_t *parent, void (*return_cb)(void)) {
                               menu_save_flash_cb);
   ui_menu_add_entry_with_icon(backup_menu, ICON_SD_CARD, "Save to SD",
                               menu_save_sd_cb);
+#if CONFIG_KERN_NFC
+  if (settings_get_nfc_enabled())
+    ui_menu_add_entry_with_icon(backup_menu, "N", "Save to NFC",
+                                menu_save_nfc_cb);
+#endif
 }
 
 void backup_menu_page_show(void) {
