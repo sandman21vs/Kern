@@ -10,12 +10,10 @@
  *   4       record type (NFC_RECORD_KEF)
  *   5       reserved, must be zero
  *   6..7    payload length, big endian
- *   8..11   CRC-32 of the payload, big endian
- *   12..15  reserved, must be zero
+ *   8..15   reserved, must be zero
  *
- * The CRC catches a half-written or decaying card. It is not a tamper check —
- * authentication is the KEF envelope's job, and the payload stays untrusted
- * even after it verifies.
+ * There is no checksum: the KEF envelope is authenticated, so a half-written
+ * or decaying card fails to decrypt. The payload stays untrusted regardless.
  *
  * Pure: no I/O and no ESP-IDF, so the host test suite compiles this file
  * unchanged.
@@ -39,7 +37,6 @@
 typedef struct {
   uint8_t type;
   uint16_t payload_len;
-  uint32_t payload_crc;
 } nfc_record_t;
 
 typedef enum {
@@ -49,11 +46,7 @@ typedef enum {
   NFC_RECORD_ERR_TYPE,
   NFC_RECORD_ERR_RESERVED,
   NFC_RECORD_ERR_LENGTH,
-  NFC_RECORD_ERR_CRC,
 } nfc_record_err_t;
-
-/* CRC-32/ISO-HDLC, computed bitwise — no table, negligible over 704 bytes. */
-uint32_t nfc_record_crc32(const uint8_t *data, size_t len);
 
 /*
  * Validate a header read off a tag.
@@ -65,13 +58,9 @@ uint32_t nfc_record_crc32(const uint8_t *data, size_t len);
 nfc_record_err_t nfc_record_parse(const uint8_t *header, size_t capacity,
                                   nfc_record_t *out);
 
-/* Confirm a payload matches the CRC its header promised. */
-nfc_record_err_t nfc_record_verify(const nfc_record_t *rec,
-                                   const uint8_t *payload, size_t len);
-
-/* Serialize the header for a payload about to be written. */
-nfc_record_err_t nfc_record_build(uint8_t *header, const uint8_t *payload,
-                                  size_t len, size_t capacity);
+/* Serialize the header for a payload of len bytes about to be written. */
+nfc_record_err_t nfc_record_build(uint8_t *header, size_t len,
+                                  size_t capacity);
 
 const char *nfc_record_err_str(nfc_record_err_t err);
 
