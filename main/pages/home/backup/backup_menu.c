@@ -125,7 +125,8 @@ void backup_menu_page_create(lv_obj_t *parent, void (*return_cb)(void)) {
                               menu_save_sd_cb);
 #if CONFIG_KERN_NFC
   if (settings_get_nfc_enabled())
-    ui_menu_add_entry(backup_menu, "Save to NFC", menu_save_nfc_cb);
+    ui_menu_add_entry_with_icon(backup_menu, "N", "Save to NFC",
+                                menu_save_nfc_cb);
 #endif
 }
 

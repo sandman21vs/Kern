@@ -260,8 +260,9 @@ void load_menu_page_create(lv_obj_t *parent, void (*return_cb)(void)) {
                               from_sd_cb);
 #if CONFIG_KERN_NFC
   if (settings_get_nfc_enabled())
-    ui_menu_add_entry_with_icon(load_menu, LV_SYMBOL_WIFI, "From NFC Card",
-                                from_nfc_cb);
+    /* The N-Mark is a letter, and the theme font falls back to the icon font
+       rather than the other way round, so plain text renders here. */
+    ui_menu_add_entry_with_icon(load_menu, "N", "From NFC Card", from_nfc_cb);
 #endif
   ui_menu_show(load_menu);
 }
