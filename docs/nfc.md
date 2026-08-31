@@ -121,8 +121,7 @@ A 16-byte header at linear offset 0, payload immediately after:
 4       record type (1 = KEF envelope)
 5       reserved, must be zero
 6..7    payload length, big endian
-8..11   CRC-32 of the payload, big endian
-12..15  reserved, must be zero
+8..15   reserved, must be zero
 ```
 
 Offsets are linear. `picc.c` maps them onto MIFARE Classic blocks (skipping
@@ -132,8 +131,8 @@ neither the record layer nor the pages know which kind of tag is present.
 The backup ID is not stored separately — it already lives inside the KEF
 envelope's header, and `storage_get_kef_display_name()` reads it from there.
 
-The CRC catches a half-written or decaying card. It is not a tamper check:
-authentication is the KEF envelope's job.
+There is no checksum: the KEF envelope is authenticated, so a half-written or
+decaying card fails to decrypt.
 
 ### A phone will show the card as empty
 
@@ -174,8 +173,7 @@ stops at the first divergence: magic, then type, then reserved bytes (which must
 be zero, denying the field as a covert channel), then length against both the
 compile-time ceiling and the tag's real capacity. The allocation uses the
 validated value, never the raw field, so a hostile card cannot drive a large
-allocation. The payload's CRC is checked last; a mismatch wipes the buffer
-before freeing, since it may be partial ciphertext.
+allocation.
 
 **After decryption** (`nfc_load_mnemonic.c`) — decrypting does not make the
 bytes ours. KEF versions with a 16-bit hidden auth let a wrong password through

@@ -39,15 +39,11 @@ static int tests_failed = 0;
 /* A 1K MIFARE Classic clamped to one record's worth of addressable bytes. */
 #define CAPACITY 720
 
-static const uint8_t PAYLOAD[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
-                                  0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C,
-                                  0x0D, 0x0E, 0x0F, 0x10};
-#define PAYLOAD_LEN (sizeof(PAYLOAD))
+#define PAYLOAD_LEN 16
 
-/* Build a valid header for PAYLOAD, for tests to then corrupt. */
+/* Build a valid header for tests to then corrupt. */
 static void good_header(uint8_t header[NFC_HEADER_LEN]) {
-  nfc_record_err_t err =
-      nfc_record_build(header, PAYLOAD, PAYLOAD_LEN, CAPACITY);
+  nfc_record_err_t err = nfc_record_build(header, PAYLOAD_LEN, CAPACITY);
   if (err != NFC_RECORD_OK) {
     printf("FATAL: could not build a valid header (%s)\n",
            nfc_record_err_str(err));
@@ -59,23 +55,6 @@ static void set_len(uint8_t header[NFC_HEADER_LEN], uint16_t len) {
   header[7] = (uint8_t)(len & 0xFF);
 }
 
-/* ---------- CRC ---------- */
-
-static void test_crc32(void) {
-  TEST("CRC-32 check value");
-  /* The standard CRC-32/ISO-HDLC check value for "123456789". */
-  uint32_t crc = nfc_record_crc32((const uint8_t *)"123456789", 9);
-  CHECK(crc == 0xCBF43926u, "check value mismatch");
-
-  TEST("CRC-32 of empty input");
-  CHECK(nfc_record_crc32((const uint8_t *)"", 0) == 0u, "expected 0");
-
-  TEST("CRC-32 detects a single flipped bit");
-  uint8_t a[8] = {0}, b[8] = {0};
-  b[3] ^= 0x01;
-  CHECK(nfc_record_crc32(a, 8) != nfc_record_crc32(b, 8), "collision");
-}
-
 /* ---------- Round trip ---------- */
 
 static void test_round_trip(void) {
@@ -83,8 +62,7 @@ static void test_round_trip(void) {
   nfc_record_t rec;
 
   TEST("build accepts a normal payload");
-  CHECK(nfc_record_build(header, PAYLOAD, PAYLOAD_LEN, CAPACITY) ==
-            NFC_RECORD_OK,
+  CHECK(nfc_record_build(header, PAYLOAD_LEN, CAPACITY) == NFC_RECORD_OK,
         "build refused a valid payload");
 
   TEST("parse accepts what build produced");
@@ -95,17 +73,11 @@ static void test_round_trip(void) {
   CHECK(rec.type == NFC_RECORD_KEF && rec.payload_len == PAYLOAD_LEN,
         "fields do not match");
 
-  TEST("verify accepts the matching payload");
-  CHECK(nfc_record_verify(&rec, PAYLOAD, PAYLOAD_LEN) == NFC_RECORD_OK,
-        "verify refused a good payload");
-
   TEST("maximum-size payload round trips");
-  static uint8_t big[NFC_RECORD_MAX_PAYLOAD];
-  for (size_t i = 0; i < sizeof(big); i++)
-    big[i] = (uint8_t)i;
-  CHECK(nfc_record_build(header, big, sizeof(big), CAPACITY) == NFC_RECORD_OK &&
+  CHECK(nfc_record_build(header, NFC_RECORD_MAX_PAYLOAD, CAPACITY) ==
+                NFC_RECORD_OK &&
             nfc_record_parse(header, CAPACITY, &rec) == NFC_RECORD_OK &&
-            rec.payload_len == sizeof(big),
+            rec.payload_len == NFC_RECORD_MAX_PAYLOAD,
         "largest allowed payload was refused");
 }
 
@@ -150,7 +122,7 @@ static void test_bad_type(void) {
 }
 
 static void test_reserved_bytes(void) {
-  const int reserved[] = {5, 12, 13, 14, 15};
+  const int reserved[] = {5, 8, 9, 10, 11, 12, 13, 14, 15};
 
   for (size_t i = 0; i < sizeof(reserved) / sizeof(reserved[0]); i++) {
     uint8_t header[NFC_HEADER_LEN];
@@ -219,50 +191,20 @@ static void test_bad_length(void) {
         "accepted zero capacity");
 }
 
-static void test_bad_payload(void) {
-  uint8_t header[NFC_HEADER_LEN];
-  nfc_record_t rec;
-  uint8_t corrupt[PAYLOAD_LEN];
-
-  good_header(header);
-  if (nfc_record_parse(header, CAPACITY, &rec) != NFC_RECORD_OK) {
-    printf("FATAL: valid header did not parse\n");
-    return;
-  }
-
-  TEST("flipped payload bit fails the checksum");
-  memcpy(corrupt, PAYLOAD, PAYLOAD_LEN);
-  corrupt[7] ^= 0x01;
-  CHECK(nfc_record_verify(&rec, corrupt, PAYLOAD_LEN) == NFC_RECORD_ERR_CRC,
-        "accepted a corrupted payload");
-
-  TEST("payload shorter than the header claims is refused");
-  CHECK(nfc_record_verify(&rec, PAYLOAD, PAYLOAD_LEN - 1) ==
-            NFC_RECORD_ERR_LENGTH,
-        "accepted a short payload");
-
-  TEST("payload longer than the header claims is refused");
-  CHECK(nfc_record_verify(&rec, PAYLOAD, PAYLOAD_LEN + 1) ==
-            NFC_RECORD_ERR_LENGTH,
-        "accepted a long payload");
-}
-
 static void test_build_limits(void) {
   uint8_t header[NFC_HEADER_LEN];
-  static uint8_t big[NFC_RECORD_MAX_PAYLOAD + 1];
 
   TEST("build refuses an oversize payload");
-  CHECK(nfc_record_build(header, big, sizeof(big), CAPACITY) ==
+  CHECK(nfc_record_build(header, NFC_RECORD_MAX_PAYLOAD + 1, CAPACITY) ==
             NFC_RECORD_ERR_LENGTH,
         "built a record over the ceiling");
 
   TEST("build refuses a payload the tag cannot hold");
-  CHECK(nfc_record_build(header, PAYLOAD, PAYLOAD_LEN, 20) ==
-            NFC_RECORD_ERR_LENGTH,
+  CHECK(nfc_record_build(header, PAYLOAD_LEN, 20) == NFC_RECORD_ERR_LENGTH,
         "built a record larger than the tag");
 
   TEST("build refuses an empty payload");
-  CHECK(nfc_record_build(header, PAYLOAD, 0, CAPACITY) == NFC_RECORD_ERR_LENGTH,
+  CHECK(nfc_record_build(header, 0, CAPACITY) == NFC_RECORD_ERR_LENGTH,
         "built an empty record");
 }
 
@@ -275,29 +217,19 @@ static void test_null_args(void) {
             nfc_record_parse(header, CAPACITY, NULL) == NFC_RECORD_ERR_ARG,
         "NULL accepted");
 
-  TEST("verify rejects NULL arguments");
-  CHECK(nfc_record_verify(NULL, PAYLOAD, PAYLOAD_LEN) == NFC_RECORD_ERR_ARG &&
-            nfc_record_verify(&rec, NULL, PAYLOAD_LEN) == NFC_RECORD_ERR_ARG,
-        "NULL accepted");
-
-  TEST("build rejects NULL arguments");
-  CHECK(nfc_record_build(NULL, PAYLOAD, PAYLOAD_LEN, CAPACITY) ==
-                NFC_RECORD_ERR_ARG &&
-            nfc_record_build(header, NULL, PAYLOAD_LEN, CAPACITY) ==
-                NFC_RECORD_ERR_ARG,
+  TEST("build rejects a NULL header");
+  CHECK(nfc_record_build(NULL, PAYLOAD_LEN, CAPACITY) == NFC_RECORD_ERR_ARG,
         "NULL accepted");
 }
 
 int main(void) {
   printf("=== NFC record parser tests ===\n\n");
 
-  test_crc32();
   test_round_trip();
   test_bad_magic();
   test_bad_type();
   test_reserved_bytes();
   test_bad_length();
-  test_bad_payload();
   test_build_limits();
   test_null_args();
 
