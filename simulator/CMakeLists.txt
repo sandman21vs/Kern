@@ -230,6 +230,7 @@ set(PLATFORM_SIM_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/bsp_sim/bsp_sim.c
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/bsp_sim/pmic_sim.c
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/sd_card_sim/sd_card_sim.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/platform/audio_sim/audio_sim.c
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/video_sim/video_sim.c
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/video_sim/stb_image_impl.c
 )
@@ -381,6 +382,7 @@ target_include_directories(kern_simulator PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/bsp_sim/include
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/video_sim/include
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/sd_card_sim/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../components/audio/include
     ${CMAKE_CURRENT_SOURCE_DIR}/platform               # sdkconfig.h
     ${CMAKE_CURRENT_SOURCE_DIR}                         # lv_conf.h
     ${MBEDTLS_INCLUDE_DIRS}
