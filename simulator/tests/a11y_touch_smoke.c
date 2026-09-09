@@ -22,6 +22,10 @@
 #include "ui/input_helpers.h"
 #include "ui/theme.h"
 #include "ui/theme_widgets.h"
+#include "src/drivers/sdl/lv_sdl_mouse.h"
+#include "src/drivers/sdl/lv_sdl_private.h"
+#include "src/drivers/sdl/lv_sdl_window.h"
+#include <SDL2/SDL.h>
 #include <lvgl.h>
 #include <stdio.h>
 #include <string.h>
@@ -51,6 +55,17 @@ static void fake_read(lv_indev_t *indev, lv_indev_data_t *data) {
   (void)indev;
   data->point = touch_pt;
   data->state = touch_down ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+}
+
+/* The real SDL handler used to recognize its mouse by read-callback identity.
+ * Wrapping that callback, as the screen reader does, then made the handler drop
+ * every event before the wrapper could see it. */
+static lv_indev_read_cb_t sdl_original_read;
+static bool sdl_wrapped_saw_press;
+static void sdl_wrapped_read(lv_indev_t *indev, lv_indev_data_t *data) {
+  sdl_original_read(indev, data);
+  if (data->state == LV_INDEV_STATE_PRESSED)
+    sdl_wrapped_saw_press = true;
 }
 
 static void flush(lv_display_t *d, const lv_area_t *a, uint8_t *px) {
@@ -420,6 +435,29 @@ int main(void) {
 
   lv_indev_set_mode(indev, LV_INDEV_MODE_TIMER);
   a11y_set_enabled(false);
+
+  /* --- real SDL dispatch: reaches a mouse after its read cb is wrapped --- */
+  SDL_SetHint(SDL_HINT_VIDEODRIVER, "dummy");
+  lv_display_t *sdl_disp = lv_sdl_window_create(64, 64);
+  lv_indev_t *sdl_indev = lv_sdl_mouse_create();
+  check("SDL test display and mouse are available", sdl_disp && sdl_indev);
+  if (sdl_disp && sdl_indev) {
+    lv_indev_set_display(sdl_indev, sdl_disp);
+    sdl_original_read = lv_indev_get_read_cb(sdl_indev);
+    lv_indev_set_read_cb(sdl_indev, sdl_wrapped_read);
+
+    SDL_Window *window = lv_sdl_window_get_window(sdl_disp);
+    SDL_Event event = {0};
+    event.type = SDL_MOUSEBUTTONDOWN;
+    event.button.windowID = SDL_GetWindowID(window);
+    event.button.button = SDL_BUTTON_LEFT;
+    event.button.x = 10;
+    event.button.y = 10;
+    sdl_wrapped_saw_press = false;
+    lv_sdl_mouse_handler(&event);
+    check("SDL still dispatches after the reader wraps its callback",
+          sdl_wrapped_saw_press);
+  }
 
   printf("\nPassed: %d, Failed: %d\n", pass, fail);
   return fail ? 1 : 0;

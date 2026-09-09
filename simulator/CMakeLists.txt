@@ -127,6 +127,35 @@ if(NOT EXISTS "${LVGL_DIR}/src/lvgl.h")
 endif()
 file(GLOB_RECURSE LVGL_SOURCES ${LVGL_DIR}/src/*.c)
 
+# LVGL's SDL mouse handler identifies its input device by comparing the
+# device's read callback with its private sdl_mouse_read function.  Kern's
+# screen reader deliberately wraps that callback, so the stock handler stops
+# finding the mouse and drops every SDL event while accessibility is enabled.
+# Build a narrowly patched copy which identifies the simulator's sole pointer
+# device by type and display instead.  Generate it in the build tree so the
+# managed component remains untouched and an IDF dependency refresh cannot
+# silently discard the fix.
+set(LVGL_SDL_MOUSE_SOURCE
+    "${LVGL_DIR}/src/drivers/sdl/lv_sdl_mouse.c")
+file(READ "${LVGL_SDL_MOUSE_SOURCE}" LVGL_SDL_MOUSE_CONTENT)
+set(LVGL_SDL_MOUSE_MATCH
+    "if(lv_indev_get_read_cb(indev) == sdl_mouse_read) {")
+string(FIND "${LVGL_SDL_MOUSE_CONTENT}" "${LVGL_SDL_MOUSE_MATCH}"
+       LVGL_SDL_MOUSE_MATCH_AT)
+if(LVGL_SDL_MOUSE_MATCH_AT EQUAL -1)
+  message(FATAL_ERROR
+    "LVGL SDL mouse lookup changed; update the accessibility compatibility patch")
+endif()
+string(REPLACE "${LVGL_SDL_MOUSE_MATCH}"
+               "if(lv_indev_get_type(indev) == LV_INDEV_TYPE_POINTER) {"
+               LVGL_SDL_MOUSE_PATCHED "${LVGL_SDL_MOUSE_CONTENT}")
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated/lvgl")
+set(LVGL_SDL_MOUSE_PATCHED_SOURCE
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/lvgl/lv_sdl_mouse.c")
+file(WRITE "${LVGL_SDL_MOUSE_PATCHED_SOURCE}" "${LVGL_SDL_MOUSE_PATCHED}")
+list(REMOVE_ITEM LVGL_SOURCES "${LVGL_SDL_MOUSE_SOURCE}")
+list(APPEND LVGL_SOURCES "${LVGL_SDL_MOUSE_PATCHED_SOURCE}")
+
 set(APP_UI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui)
 
 # --- Simulator entry point and theme ---
@@ -377,6 +406,7 @@ target_include_directories(lvgl PUBLIC
 )
 target_include_directories(lvgl PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${LVGL_DIR}/src/drivers/sdl
     ${SDL2_INCLUDE_DIRS}
 )
 target_compile_definitions(lvgl PRIVATE
