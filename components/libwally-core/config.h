@@ -20,7 +20,14 @@
 /* #undef HAVE_DLFCN_H */
 
 /* Define to 1 if you have the `explicit_bzero' function. */
+/* newlib, which the firmware links against, has it. Apple's libc does not
+   declare it anywhere, and since AppleClang 21 an implicit declaration is an
+   error rather than a warning, so the simulator host would not build. Only
+   the simulator is ever compiled for Apple; the device build is unaffected
+   and keeps the explicit wipe. */
+#ifndef __APPLE__
 #define HAVE_EXPLICIT_BZERO 1
+#endif
 
 /* Define to 1 if you have the `explicit_memset' function. */
 /* #undef HAVE_EXPLICIT_MEMSET */
