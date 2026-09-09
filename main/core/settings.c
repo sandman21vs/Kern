@@ -23,6 +23,7 @@ static const char *KEY_EXPECTED_OWNED_SIGNING = "exp_own_sign";
 static const char *KEY_SCREENSAVER = "scrn_svr";
 static const char *KEY_SESSION_TIMEOUT = "sess_tout";
 static const char *KEY_A11Y_ENABLED = "a11y_en";
+static const char *KEY_A11Y_SECRETS = "a11y_sec";
 static const char *KEY_DISCLAIMER_VERSION = "disc_ver";
 
 static nvs_handle_t settings_nvs;
@@ -238,6 +239,16 @@ bool settings_get_a11y_enabled(void) {
 
 esp_err_t settings_set_a11y_enabled(bool enabled) {
   return settings_set_bool_and_commit(KEY_A11Y_ENABLED, enabled);
+}
+
+/* Off, and the one setting in here whose default is a refusal rather than a
+ * preference: with it on the device will read a seed out loud. */
+bool settings_get_a11y_secrets(void) {
+  return settings_get_bool_or_default(KEY_A11Y_SECRETS, false);
+}
+
+esp_err_t settings_set_a11y_secrets(bool allowed) {
+  return settings_set_bool_and_commit(KEY_A11Y_SECRETS, allowed);
 }
 
 uint16_t settings_get_screensaver_timeout(void) {

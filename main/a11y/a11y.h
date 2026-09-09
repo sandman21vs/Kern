@@ -31,6 +31,20 @@ bool a11y_enabled(void);
  */
 void a11y_announce(const char *text);
 
+/**
+ * Allow masked content - seed words, PIN digits, a passphrase - to be read
+ * aloud. Off by default and worth leaving off: the board has a speaker and no
+ * headphone jack, so everything it says can be overheard or recorded.
+ *
+ * It exists because the alternative is worse. With it off, someone who cannot
+ * see the screen cannot enter a PIN or check a seed backup at all; the reader
+ * plays a tone where the digits are and nothing else. Turning it on is a
+ * decision about the room they are in, and only they can make it.
+ */
+void a11y_set_speak_secrets(bool allowed);
+
+bool a11y_speak_secrets(void);
+
 /** Stop talking now. The session lock and the screensaver use this. */
 void a11y_silence(void);
 

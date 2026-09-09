@@ -339,6 +339,19 @@ void ui_text_input_create(ui_text_input_t *input, lv_obj_t *parent,
                       compact_kb_map_spec, compact_kb_ctrl_spec_map);
 
   theme_apply_btnmatrix_styles(input->keyboard);
+
+#if CONFIG_KERN_A11Y
+  /* password_mode is the codebase's own marker for "this is secret": it is
+     what turns the textarea into dots and puts the eye toggle beside it. The
+     same signal masks the field and its keyboard from the screen reader, which
+     covers the PIN pad, the passphrase and the KEF key in one place instead of
+     five. Every key then sounds identical, so the sequence cannot be read off
+     the tones either. */
+  if (password_mode) {
+    a11y_mask(input->textarea);
+    a11y_mask(input->keyboard);
+  }
+#endif
 }
 
 void ui_text_input_show(ui_text_input_t *input) {

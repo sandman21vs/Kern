@@ -1,9 +1,13 @@
 // Mnemonic Words Backup Page
 
-#include "mnemonic_words.h"
+#include "sdkconfig.h"
+#if CONFIG_KERN_A11Y
+#include "../../../a11y/describe.h"
+#endif
 #include "../../../core/key.h"
 #include "../../../ui/theme.h"
 #include "../../../ui/theme_widgets.h"
+#include "mnemonic_words.h"
 #include <lvgl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,6 +71,11 @@ void mnemonic_words_page_create(lv_obj_t *parent, void (*return_cb)(void)) {
   theme_create_page_title(mnemonic_screen, "BIP39 Words");
 
   lv_obj_t *content = lv_obj_create(mnemonic_screen);
+#if CONFIG_KERN_A11Y
+  /* The whole point of this page is the seed. Masked as one container, so
+     every word row inside it is covered without each one remembering. */
+  a11y_mask(content);
+#endif
   lv_obj_set_size(content, LV_PCT(100), LV_SIZE_CONTENT);
   lv_obj_set_style_pad_all(content, 0, 0);
   lv_obj_set_style_border_width(content, 0, 0);

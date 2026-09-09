@@ -237,8 +237,10 @@ int main(int argc, char *argv[]) {
     /* Before the boot gate, for the same reason as on the device: the PIN pad
      * has to be readable by someone who cannot see it. */
     if (settings_get_a11y_enabled()) {
-        if (a11y_init())
+        if (a11y_init()) {
             a11y_set_enabled(true);
+            a11y_set_speak_secrets(settings_get_a11y_secrets());
+        }
         else
             fprintf(stderr, "Screen reader on in settings but no audio device\n");
     }

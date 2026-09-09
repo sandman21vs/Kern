@@ -32,6 +32,23 @@ size_t a11y_describe(lv_obj_t *obj, char *out, size_t max);
 void a11y_label(lv_obj_t *obj, const char *name);
 
 /**
+ * Mark `obj` and everything inside it as carrying secret material.
+ *
+ * The reader stops on a masked control so its presence is known, but says a
+ * short tone instead of its contents. Anything a camera or a microphone in the
+ * room should not get is masked: seed words, PIN digits, a passphrase being
+ * typed. The mark is dropped when the object is deleted.
+ *
+ * Masking is lifted only by the explicit "speak sensitive data" setting, and
+ * that setting exists because without it someone who cannot see the screen
+ * cannot enter a PIN or check a seed backup at all.
+ */
+void a11y_mask(lv_obj_t *obj);
+
+/** True when `obj` is masked, or lives inside something that is. */
+bool a11y_is_masked(lv_obj_t *obj);
+
+/**
  * True when `obj` is something the reader should stop on, rather than a
  * container it should look inside. Buttons and other controls are stops; so is
  * a label with text. A panel holding them is not.

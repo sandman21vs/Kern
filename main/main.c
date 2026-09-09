@@ -131,9 +131,10 @@ void app_main(void) {
   // yet. Costs nothing when the setting is off - the codec is only brought up
   // if it is on.
   if (settings_get_a11y_enabled()) {
-    if (a11y_init())
+    if (a11y_init()) {
       a11y_set_enabled(true);
-    else
+      a11y_set_speak_secrets(settings_get_a11y_secrets());
+    } else
       ESP_LOGW(TAG, "Screen reader enabled in settings but no speaker found");
   }
 #endif

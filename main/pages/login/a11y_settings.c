@@ -16,6 +16,15 @@
 
 #include <lvgl.h>
 
+static const char *SECRETS_HELP =
+    "Read seed words, PINs and passphrases aloud.\n\nThe board has a speaker "
+    "and no headphone jack, so anything it says can be overheard or recorded "
+    "by anyone near it. Leave this off unless you are alone.\n\nIt exists "
+    "because with it off there is no way to enter a PIN or check a seed "
+    "backup without seeing the screen: the reader plays a tone where those "
+    "are and says nothing. Whether the room is safe is a judgement only you "
+    "can make.";
+
 static const char *READER_HELP =
     "Read the interface aloud and navigate it by touch, for someone who "
     "cannot see the screen.\n\nDrag a finger across the screen to hear what "
@@ -28,18 +37,58 @@ static const char *READER_HELP =
 static lv_obj_t *a11y_settings_screen = NULL;
 static lv_obj_t *back_button = NULL;
 static lv_obj_t *test_row = NULL;
+static lv_obj_t *secrets_row = NULL;
 static void (*return_callback)(void) = NULL;
 
-static void set_test_enabled(bool enabled) {
-  if (!test_row)
+static void set_row_enabled(lv_obj_t *row, bool enabled) {
+  if (!row)
     return;
   if (enabled) {
-    lv_obj_clear_state(test_row, LV_STATE_DISABLED);
-    lv_obj_add_flag(test_row, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_state(row, LV_STATE_DISABLED);
+    lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
   } else {
-    lv_obj_add_state(test_row, LV_STATE_DISABLED);
-    lv_obj_remove_flag(test_row, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_state(row, LV_STATE_DISABLED);
+    lv_obj_remove_flag(row, LV_OBJ_FLAG_CLICKABLE);
   }
+}
+
+/* Both rows below the main switch only mean anything while the reader is on. */
+static void set_test_enabled(bool enabled) {
+  set_row_enabled(test_row, enabled);
+  set_row_enabled(secrets_row, enabled);
+}
+
+/* Reached only after the danger dialog is answered. Yes turns it on; anything
+   else puts the switch back, because the dialog is the consent and a dismissed
+   dialog is not one. */
+static void secrets_confirmed(bool yes, void *user_data) {
+  lv_obj_t *sw = (lv_obj_t *)user_data;
+  if (yes) {
+    settings_set_a11y_secrets(true);
+    a11y_set_speak_secrets(true);
+    a11y_announce("Sensitive data will be spoken");
+    return;
+  }
+  if (sw)
+    lv_obj_clear_state(sw, LV_STATE_CHECKED);
+}
+
+static void secrets_toggle_cb(lv_event_t *e) {
+  lv_obj_t *sw = lv_event_get_target(e);
+  const bool on = lv_obj_has_state(sw, LV_STATE_CHECKED);
+
+  if (!on) {
+    settings_set_a11y_secrets(false);
+    a11y_set_speak_secrets(false);
+    return;
+  }
+
+  /* Turning it on is the destructive direction here, so it gets the danger
+     dialog: red border, warning icon, and the safe answer in green. */
+  dialog_show_danger_confirm(
+      "Read seed words, PINs and passphrases out loud?\n\nAnyone near the "
+      "device will hear them.",
+      secrets_confirmed, sw, DIALOG_STYLE_OVERLAY);
 }
 
 static void toggle_cb(lv_event_t *e) {
@@ -88,6 +137,7 @@ void a11y_settings_page_create(lv_obj_t *parent, void (*return_cb)(void)) {
   a11y_settings_screen = NULL;
   back_button = NULL;
   test_row = NULL;
+  secrets_row = NULL;
   return_callback = return_cb;
 
   a11y_settings_screen = lv_obj_create(parent);
@@ -130,6 +180,10 @@ void a11y_settings_page_create(lv_obj_t *parent, void (*return_cb)(void)) {
   settings_row_toggle(content, "Screen reader", enabled, toggle_cb,
                       "Screen reader", READER_HELP);
 
+  secrets_row = settings_row_toggle(
+      content, "Speak sensitive data", settings_get_a11y_secrets(),
+      secrets_toggle_cb, "Speak sensitive data", SECRETS_HELP);
+
   test_row = settings_row_action(content, "Test speaker", test_speaker_cb);
   set_test_enabled(enabled);
 
@@ -166,5 +220,6 @@ void a11y_settings_page_destroy(void) {
     a11y_settings_screen = NULL;
   }
   test_row = NULL;
+  secrets_row = NULL;
   return_callback = NULL;
 }

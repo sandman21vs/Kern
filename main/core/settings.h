@@ -58,6 +58,8 @@ KERN_WARN_UNUSED_RESULT bool settings_get_expected_owned_signing(void);
 esp_err_t settings_set_expected_owned_signing(bool enabled);
 KERN_WARN_UNUSED_RESULT bool settings_get_a11y_enabled(void);
 esp_err_t settings_set_a11y_enabled(bool enabled);
+KERN_WARN_UNUSED_RESULT bool settings_get_a11y_secrets(void);
+esp_err_t settings_set_a11y_secrets(bool allowed);
 KERN_WARN_UNUSED_RESULT uint16_t settings_get_screensaver_timeout(void);
 esp_err_t settings_set_screensaver_timeout(uint16_t sec);
 KERN_WARN_UNUSED_RESULT uint16_t settings_get_session_timeout(void);

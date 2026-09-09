@@ -94,6 +94,48 @@ void a11y_label(lv_obj_t *obj, const char *name) {
    * evicting one that is still on screen. */
 }
 
+/* Masked subtrees. Separate from the name table because the lookup walks up
+ * the parent chain: a page marks one container and every word inside it is
+ * covered, rather than each label having to remember. */
+#define MAX_MASKS 8
+
+static lv_obj_t *masks[MAX_MASKS];
+
+static void forget_mask(lv_event_t *e) {
+  lv_obj_t *obj = lv_event_get_target(e);
+  for (size_t i = 0; i < MAX_MASKS; i++)
+    if (masks[i] == obj) {
+      masks[i] = NULL;
+      return;
+    }
+}
+
+void a11y_mask(lv_obj_t *obj) {
+  if (!obj)
+    return;
+  for (size_t i = 0; i < MAX_MASKS; i++)
+    if (masks[i] == obj)
+      return;
+  for (size_t i = 0; i < MAX_MASKS; i++)
+    if (!masks[i]) {
+      masks[i] = obj;
+      lv_obj_add_event_cb(obj, forget_mask, LV_EVENT_DELETE, NULL);
+      return;
+    }
+  /* Full. Failing to mask would read a seed out loud, so refuse the page
+   * rather than the mark: nothing here can do that, but the assert says what
+   * the ceiling is for. */
+  LV_ASSERT_MSG(false, "a11y mask table full");
+}
+
+bool a11y_is_masked(lv_obj_t *obj) {
+  for (lv_obj_t *node = obj; node; node = lv_obj_get_parent(node))
+    for (size_t i = 0; i < MAX_MASKS; i++)
+      if (masks[i] && masks[i] == node)
+        return true;
+  return false;
+}
+
 static const char *name_of(lv_obj_t *obj) {
   for (size_t i = 0; i < MAX_NAMES; i++)
     if (names[i].obj == obj)

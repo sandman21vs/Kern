@@ -43,6 +43,7 @@ static lv_indev_read_cb_t original_read;
 static lv_indev_t *touch;
 static bool enabled;
 static bool installed;
+static bool speak_secrets;
 
 /* Reading order, rebuilt when the screen has changed under us. */
 static lv_obj_t *stops[MAX_STOPS];
@@ -127,6 +128,16 @@ static int index_of(lv_obj_t *obj) {
 /* ---------- Saying things ---------- */
 
 static void speak(lv_obj_t *obj) {
+  /* Masked material never reaches the speaker unless it was explicitly asked
+   * for. The reader still stops here and still says something, because going
+   * silent would read as a dead area of the screen rather than a protected
+   * one. */
+  if (!speak_secrets && a11y_is_masked(obj)) {
+    spoken = obj;
+    speech_earcon(SPEECH_EARCON_MASKED);
+    return;
+  }
+
   char text[MAX_TEXT];
   if (a11y_describe(obj, text, sizeof(text)) == 0)
     return;
@@ -293,6 +304,10 @@ void a11y_announce(const char *text) {
   cursor = -1;
   speech_say(text);
 }
+
+void a11y_set_speak_secrets(bool allowed) { speak_secrets = allowed; }
+
+bool a11y_speak_secrets(void) { return speak_secrets; }
 
 void a11y_silence(void) {
   if (installed)
