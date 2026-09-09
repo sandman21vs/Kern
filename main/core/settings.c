@@ -22,6 +22,7 @@ static const char *KEY_PARTIAL_SIGNING = "part_sign";
 static const char *KEY_EXPECTED_OWNED_SIGNING = "exp_own_sign";
 static const char *KEY_SCREENSAVER = "scrn_svr";
 static const char *KEY_SESSION_TIMEOUT = "sess_tout";
+static const char *KEY_A11Y_ENABLED = "a11y_en";
 static const char *KEY_DISCLAIMER_VERSION = "disc_ver";
 
 static nvs_handle_t settings_nvs;
@@ -227,6 +228,16 @@ bool settings_get_expected_owned_signing(void) {
 
 esp_err_t settings_set_expected_owned_signing(bool enabled) {
   return settings_set_bool_and_commit(KEY_EXPECTED_OWNED_SIGNING, enabled);
+}
+
+/* Off unless the user asks for it. A signer that announces itself can be
+ * overheard, and someone who does not need the reader should never hear it. */
+bool settings_get_a11y_enabled(void) {
+  return settings_get_bool_or_default(KEY_A11Y_ENABLED, false);
+}
+
+esp_err_t settings_set_a11y_enabled(bool enabled) {
+  return settings_set_bool_and_commit(KEY_A11Y_ENABLED, enabled);
 }
 
 uint16_t settings_get_screensaver_timeout(void) {

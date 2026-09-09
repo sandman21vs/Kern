@@ -7,6 +7,9 @@
 #include "../core/wallet.h"
 #include "../ui/dialog.h"
 #include "../utils/session.h"
+#if CONFIG_KERN_A11Y
+#include "../a11y/a11y.h"
+#endif
 #include "disclaimer.h"
 #include "login/login.h"
 #include "pin/pin_page.h"
@@ -106,6 +109,12 @@ static void session_expired_handler(void) {
     return;
   }
   device_locked = true;
+#if CONFIG_KERN_A11Y
+  // Stop mid-word. The screen this was describing is about to be torn down,
+  // and a device that keeps reading a page nobody is on is worse than one
+  // that stops abruptly.
+  a11y_silence();
+#endif
   // Tear down a plain screensaver before cleaning the screen, otherwise its
   // statics would dangle and the lock-face create below would touch freed
   // objects.

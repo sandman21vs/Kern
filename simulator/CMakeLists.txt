@@ -160,8 +160,7 @@ set(STUB_SOURCES
 )
 
 # --- Application utilities ---
-# Screen reader: the pure layers only. The queue and the touch intercept
-# arrive with the reader itself.
+# Screen reader.
 # The device embeds the voice with EMBED_FILES. CMake has no equivalent, so
 # the blob becomes a C array in the build directory; nothing generated here is
 # committed.
@@ -182,6 +181,8 @@ set(APP_A11Y_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/speech_text.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/speech.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/speech_blob.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/a11y.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/describe.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/assets/speech_lexicon.c
     ${SPEECH_BLOB_C}
 )

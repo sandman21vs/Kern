@@ -14,6 +14,7 @@
 #include "core/nvs_secure.h"
 #include "core/settings.h"
 #include "core/pin.h"
+#include "a11y/a11y.h"
 #include "pages/session_lock.h"
 #include "esp_lvgl_port.h"
 #include "utils/bip39_filter.h"
@@ -231,6 +232,15 @@ int main(int argc, char *argv[]) {
     if (pin_ret != ESP_OK) {
         fprintf(stderr, "PIN init failed: %s\n", esp_err_to_name(pin_ret));
         return 1;
+    }
+
+    /* Before the boot gate, for the same reason as on the device: the PIN pad
+     * has to be readable by someone who cannot see it. */
+    if (settings_get_a11y_enabled()) {
+        if (a11y_init())
+            a11y_set_enabled(true);
+        else
+            fprintf(stderr, "Screen reader on in settings but no audio device\n");
     }
 
     /* Start inactivity monitoring (screensaver + session lock) */

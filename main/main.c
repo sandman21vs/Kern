@@ -4,6 +4,9 @@
 #include "core/pbkdf2.h"
 #include "core/pin.h"
 #include "core/settings.h"
+#if CONFIG_KERN_A11Y
+#include "a11y/a11y.h"
+#endif
 #include "pages/session_lock.h"
 #include "ui/assets/kern_logo_lvgl.h"
 #include "ui/entropy_input.h"
@@ -118,6 +121,19 @@ void app_main(void) {
 
   // Lock display again for modifications
   bsp_display_lock(0);
+
+#if CONFIG_KERN_A11Y
+  // Before the boot gate: someone who cannot see the screen has to hear the
+  // PIN pad, not be asked for a PIN by a device that has not started talking
+  // yet. Costs nothing when the setting is off - the codec is only brought up
+  // if it is on.
+  if (settings_get_a11y_enabled()) {
+    if (a11y_init())
+      a11y_set_enabled(true);
+    else
+      ESP_LOGW(TAG, "Screen reader enabled in settings but no speaker found");
+  }
+#endif
 
   // Start inactivity monitoring (screensaver + session lock)
   session_lock_init();

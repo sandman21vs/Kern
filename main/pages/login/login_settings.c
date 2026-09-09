@@ -9,6 +9,9 @@
 #include "../../ui/theme_widgets.h"
 #include "../../utils/session.h"
 #include "../settings/firmware_update.h"
+#if CONFIG_KERN_A11Y
+#include "a11y_settings.h"
+#endif
 #include "security_settings.h"
 #include <bsp/display.h>
 #include <lvgl.h>
@@ -134,6 +137,23 @@ static void security_cb(void) {
   security_settings_page_show();
 }
 
+#if CONFIG_KERN_A11Y
+
+// ── Accessibility submenu ──
+
+static void a11y_return_cb(void) {
+  a11y_settings_page_destroy();
+  ui_menu_show(settings_menu);
+}
+
+static void a11y_cb(void) {
+  ui_menu_hide(settings_menu);
+  a11y_settings_page_create(lv_screen_active(), a11y_return_cb);
+  a11y_settings_page_show();
+}
+
+#endif
+
 // ── Firmware update submenu ──
 
 static void firmware_update_return_cb(void) {
@@ -174,6 +194,9 @@ void login_settings_page_create(lv_obj_t *parent, void (*return_cb)(void)) {
   ui_menu_add_entry(settings_menu, "Security", security_cb);
   ui_menu_add_entry(settings_menu, "Screen Brightness", brightness_cb);
   ui_menu_add_entry(settings_menu, "Screensaver", screensaver_cb);
+#if CONFIG_KERN_A11Y
+  ui_menu_add_entry(settings_menu, "Accessibility", a11y_cb);
+#endif
   ui_menu_add_entry(settings_menu, "Firmware Update", firmware_update_cb);
 }
 
@@ -189,6 +212,9 @@ void login_settings_page_hide(void) {
 
 void login_settings_page_destroy(void) {
   security_settings_page_destroy();
+#if CONFIG_KERN_A11Y
+  a11y_settings_page_destroy();
+#endif
   destroy_brightness_page();
   destroy_screensaver_page();
   if (settings_menu) {
