@@ -492,6 +492,58 @@ target_link_libraries(kern_simulator PRIVATE
     $<$<BOOL:${SIM_WEBCAM}>:v4l2_capture>
 )
 
+# Screen reader touch layer. Needs LVGL and the theme, so it lives here rather
+# than in main/a11y/test, which is pure C and builds without either.
+add_executable(kern_sim_a11y_smoke
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/a11y_touch_smoke.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/a11y.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/describe.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/input_helpers.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/theme.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/theme_widgets.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/text_fit.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/font_policy.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/pages/screensaver.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/assets/kern_logo_lvgl.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/assets/icons_16.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/assets/icons_22.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/assets/icons_24.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/assets/icons_28.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/assets/icons_30.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/assets/icons_32.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/assets/icons_34.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/assets/icons_40.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/ui/assets/kern_logo_font.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/platform/esp_idf_stubs/stubs.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/platform/esp_idf_stubs/sim_flash.c
+)
+
+target_include_directories(kern_sim_a11y_smoke PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/platform/esp_idf_stubs/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/platform
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y
+    ${SDL2_INCLUDE_DIRS}
+)
+
+target_compile_definitions(kern_sim_a11y_smoke PRIVATE
+    SIMULATOR=1
+    SIM_LCD_H_RES=${SIM_LCD_H_RES}
+    SIM_LCD_V_RES=${SIM_LCD_V_RES}
+)
+
+target_compile_options(kern_sim_a11y_smoke PRIVATE
+    -Wall -Wextra -Wno-unused-parameter -Wno-unused-function
+)
+
+target_link_libraries(kern_sim_a11y_smoke PRIVATE
+    lvgl
+    ${SDL2_LIBRARIES}
+    Threads::Threads
+    m
+)
+
 add_executable(kern_sim_storage_smoke
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/storage_smoke.c
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/esp_idf_stubs/storage_sim.c

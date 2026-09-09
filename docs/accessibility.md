@@ -215,6 +215,14 @@ cross-implementation vectors from the Python encoder that baked the bank, and a
 real clip read out of the committed blob and decoded to the samples the baker
 produced.
 
+`simulator/tests/a11y_touch_smoke.c` covers the touch layer itself, built as
+`kern_sim_a11y_smoke` by the simulator build: 31 checks against a real LVGL
+tree with speech stubbed to a recorder. It lives there rather than in
+`main/a11y/test` because it needs LVGL and the theme, which that suite
+deliberately does without. Both input modes are exercised — the device polls
+its input device, the simulator's SDL mouse is event-driven, and two of the
+bugs it now guards against existed only in the second.
+
 In the simulator, the speech chain has been exercised end to end against SDL —
 327 words load, an utterance takes the wall-clock time its samples say it
 should, and interrupting a five-word sentence cuts it in 205 ms — and the touch
