@@ -348,6 +348,7 @@ target_include_directories(lvgl PUBLIC
 )
 target_include_directories(lvgl PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${SDL2_INCLUDE_DIRS}
 )
 target_compile_definitions(lvgl PRIVATE
     LV_CONF_INCLUDE_SIMPLE
@@ -356,7 +357,7 @@ target_compile_definitions(lvgl PRIVATE
     lv_refr_now=kern_lv_refr_now_real
 )
 target_link_libraries(lvgl PUBLIC
-    SDL2
+    ${SDL2_LIBRARIES}
 )
 
 add_executable(kern_simulator
@@ -449,7 +450,7 @@ endif()
 
 target_link_libraries(kern_simulator PRIVATE
     lvgl
-    SDL2
+    ${SDL2_LIBRARIES}
     Threads::Threads
     m
     wally
