@@ -15,3 +15,6 @@ CONFIG_ISP_PIPELINE_CONTROLLER_TASK_STACK_USE_PSRAM=y
 # Custom IPA tuning: the stock eco4 JSON applies gamma 0.518 with no black-level correction, lifting near-black (16/255) to 25% grey. Kern's copy anchors the curve at the sensor pedestal (x<=16 -> 0) with a milder gamma 0.75; everything else matches the eco4 default.
 CONFIG_CAMERA_SC2336_CUSTOMIZED_IPA_JSON_CONFIGURATION_FILE=y
 CONFIG_CAMERA_SC2336_CUSTOMIZED_IPA_JSON_CONFIGURATION_FILE_PATH="components/video/cfg/sc2336_kern.json"
+
+# No audio codec verified on this board.
+CONFIG_KERN_AUDIO=n

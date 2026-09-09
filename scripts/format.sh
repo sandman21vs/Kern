@@ -18,6 +18,7 @@ REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR/.." &
 
 DIRS=(
     "$REPO_ROOT/main"
+    "$REPO_ROOT/components/audio"
     "$REPO_ROOT/components/bbqr"
     "$REPO_ROOT/components/bsp_common"
     "$REPO_ROOT/components/cUR"

@@ -1,0 +1,72 @@
+menu "Speaker Output"
+
+    config KERN_AUDIO
+        bool "Enable speaker output (ES8311 codec)"
+        default y
+        help
+            Compile support for driving the ES8311 audio codec and the
+            amplifier behind the board's speaker header. It exists so the
+            screen reader has somewhere to speak; nothing else in Kern makes
+            sound.
+
+            Building it in does not turn it on: audio_init() is only reached
+            when the screen reader is enabled at runtime, which is off by
+            default, and the amplifier is powered only while something is
+            actually playing.
+
+            The Waveshare boards carry the codec but ship the speaker header
+            empty. Without a speaker wired to it this is inert.
+
+    config KERN_AUDIO_I2C_ADDR
+        hex "ES8311 I2C address"
+        default 0x18
+        depends on KERN_AUDIO
+        help
+            7-bit I2C address of the codec, on the same bus the display and
+            camera already use. 0x18 is the ES8311 default and is what every
+            Waveshare ESP32-P4 board wires.
+
+    config KERN_AUDIO_MCLK_GPIO
+        int "I2S MCLK GPIO"
+        default 13
+        depends on KERN_AUDIO
+        help
+            Master clock to the codec, run at 256x the sample rate. The
+            defaults for this and the three pins below are shared by every
+            Waveshare ESP32-P4-WIFI6-Touch-LCD board.
+
+    config KERN_AUDIO_BCLK_GPIO
+        int "I2S BCLK GPIO"
+        default 12
+        depends on KERN_AUDIO
+
+    config KERN_AUDIO_LRCK_GPIO
+        int "I2S LRCK GPIO"
+        default 10
+        depends on KERN_AUDIO
+
+    config KERN_AUDIO_DOUT_GPIO
+        int "I2S data-out GPIO"
+        default 9
+        depends on KERN_AUDIO
+
+    config KERN_AUDIO_PA_GPIO
+        int "Amplifier enable GPIO"
+        default 53
+        depends on KERN_AUDIO
+        help
+            Drives the NS4150B enable line, active high. Held low except
+            while audio is playing, which keeps the speaker quiet and the
+            amplifier unpowered the rest of the time.
+
+    config KERN_AUDIO_VOLUME
+        int "Playback volume (0-100)"
+        default 70
+        range 0 100
+        depends on KERN_AUDIO
+        help
+            DAC volume the codec is programmed with at bring-up. A signer
+            that announces itself is a signer that can be overheard, so the
+            default sits below the amplifier's full output.
+
+endmenu
