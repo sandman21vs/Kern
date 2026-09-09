@@ -35,9 +35,13 @@ static const char *TAG = "A11Y";
 /* Two taps closer together than this, near the same spot, activate. */
 #define DOUBLE_TAP_MS 400
 
-/* LVGL needs the synthesised press to survive at least one read cycle before
- * the release, or there is no click to process. */
-#define PASS_PRESS_READS 2
+/* Spacing of the reads the activation timer drives. Long enough for LVGL to
+ * process each one as a distinct step, short enough to feel immediate. */
+#define PASS_TICK_MS 20
+
+/* Steps of the synthesised touch, one per tick: hold, hold, let go, done. The
+ * press is held for two so LVGL sees a stable press before the release. */
+#define PASS_STEPS 4
 
 static lv_indev_read_cb_t original_read;
 static lv_indev_t *touch;
@@ -58,8 +62,17 @@ static lv_point_t last_tap_at;
 static bool was_pressed;
 static bool moved;
 
-/* While non-zero the wrapper is feeding LVGL a real press at pass_point. */
-static int pass_reads;
+/* The synthesised touch that activation drives. Phase rather than a count of
+ * reads: lv_indev_read() runs the read callback more than once per call - it
+ * loops while the data says to keep reading - so anything that decremented per
+ * callback would race through the press and never deliver it. */
+typedef enum {
+  PASS_IDLE,
+  PASS_PRESSING,
+  PASS_RELEASING,
+} pass_phase_t;
+
+static pass_phase_t pass_phase;
 static lv_point_t pass_point;
 
 /* ---------- Finding things ---------- */
@@ -162,15 +175,57 @@ static void move_cursor(int delta) {
   speak(stops[cursor]);
 }
 
-static void activate(lv_obj_t *obj) {
-  if (!obj)
+/* Drives the synthesised press itself rather than waiting for the input device
+ * to be read again.
+ *
+ * A polled input device would deliver those reads on its own, and on the
+ * device it does - the Espressif touch adapter runs the indev in timer mode.
+ * The simulator's SDL mouse runs it in LV_INDEV_MODE_EVENT, where a read only
+ * happens when SDL reports an event: after the second tap's button-up there
+ * are no more events, so the press would sit undelivered until the user moved
+ * the mouse, and then fire late and somewhere else. Pumping the reads here
+ * makes activation behave the same under both modes. */
+static void pass_tick(lv_timer_t *timer) {
+  int *step = lv_timer_get_user_data(timer);
+
+  switch (++(*step)) {
+  case 1:
+  case 2:
+    pass_phase = PASS_PRESSING;
+    break;
+  case 3:
+    pass_phase = PASS_RELEASING;
+    break;
+  default:
+    pass_phase = PASS_IDLE;
+    lv_free(step);
+    lv_timer_delete(timer);
     return;
+  }
+  lv_indev_read(touch);
+}
+
+static void activate(lv_obj_t *obj) {
+  if (!obj || pass_phase != PASS_IDLE)
+    return;
+
   lv_area_t area;
   lv_obj_get_coords(obj, &area);
   pass_point.x = (area.x1 + area.x2) / 2;
   pass_point.y = (area.y1 + area.y2) / 2;
-  pass_reads = PASS_PRESS_READS;
+
+  int *step = lv_malloc(sizeof(int));
+  if (!step)
+    return;
+  *step = 0;
+
   speech_earcon(SPEECH_EARCON_ACTIVATE);
+
+  /* Not driven inline: this runs from inside the read callback, and
+   * lv_indev_read() from there would re-enter it. */
+  lv_timer_t *timer = lv_timer_create(pass_tick, PASS_TICK_MS, step);
+  if (!timer)
+    lv_free(step);
 }
 
 /* ---------- The intercept ---------- */
@@ -184,12 +239,12 @@ static void read_wrapper(lv_indev_t *indev, lv_indev_data_t *data) {
   if (!enabled)
     return;
 
-  /* Finishing a synthesised activation: hold the press for a couple of reads,
-   * then let go. The real widget sees a real press at its own centre. */
-  if (pass_reads > 0) {
+  /* Mid-activation: report the synthesised touch at the announced widget's
+   * centre and nothing else. The phase is advanced by the timer, not here. */
+  if (pass_phase != PASS_IDLE) {
     data->point = pass_point;
-    data->state = LV_INDEV_STATE_PRESSED;
-    pass_reads--;
+    data->state = (pass_phase == PASS_PRESSING) ? LV_INDEV_STATE_PRESSED
+                                                : LV_INDEV_STATE_RELEASED;
     return;
   }
 
@@ -290,7 +345,7 @@ void a11y_set_enabled(bool on) {
   spoken = NULL;
   cursor = -1;
   was_pressed = false;
-  pass_reads = 0;
+  pass_phase = PASS_IDLE;
   if (!on)
     speech_silence();
 }
