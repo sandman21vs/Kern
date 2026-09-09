@@ -47,6 +47,7 @@ static lv_indev_read_cb_t original_read;
 static lv_indev_t *touch;
 static bool enabled;
 static bool installed;
+static bool passthrough;
 static bool speak_secrets;
 
 /* Reading order, rebuilt when the screen has changed under us. */
@@ -239,6 +240,11 @@ static void read_wrapper(lv_indev_t *indev, lv_indev_data_t *data) {
   if (!enabled)
     return;
 
+  /* An overlay that is dismissed by any press is up. Suppressing that press is
+   * how a reader user gets stuck on it, so stand aside entirely. */
+  if (passthrough)
+    return;
+
   /* Mid-activation: report the synthesised touch at the announced widget's
    * centre and nothing else. The phase is advanced by the timer, not here. */
   if (pass_phase != PASS_IDLE) {
@@ -251,6 +257,15 @@ static void read_wrapper(lv_indev_t *indev, lv_indev_data_t *data) {
   const bool pressed = data->state == LV_INDEV_STATE_PRESSED;
   const lv_point_t point = data->point;
   const uint64_t now = esp_timer_get_time() / 1000;
+
+  /* Every touch is reported to LVGL as released, and LVGL only counts a press
+   * as activity - so without this a finger exploring the screen looks exactly
+   * like a device nobody has touched. The screensaver comes up under the
+   * user's hand, the session lock follows, and neither can be dismissed
+   * because the touches that would dismiss them are the ones being
+   * suppressed. Report the activity even though the press is swallowed. */
+  if (pressed)
+    lv_display_trigger_activity(lv_indev_get_display(indev));
 
   if (pressed && !was_pressed) {
     press_at = point;
@@ -358,6 +373,16 @@ void a11y_announce(const char *text) {
   spoken = NULL; /* the screen changed under the finger */
   cursor = -1;
   speech_say(text);
+}
+
+void a11y_set_passthrough(bool on) {
+  passthrough = on;
+  if (on) {
+    /* Whatever was being described is about to be covered up. */
+    spoken = NULL;
+    cursor = -1;
+    pass_phase = PASS_IDLE;
+  }
 }
 
 void a11y_set_speak_secrets(bool allowed) { speak_secrets = allowed; }

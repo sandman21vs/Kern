@@ -1,3 +1,7 @@
+#include "sdkconfig.h"
+#if CONFIG_KERN_A11Y
+#include "../a11y/a11y.h"
+#endif
 #include "screensaver.h"
 #include "ui/assets/kern_logo_lvgl.h"
 #include "ui/theme_widgets.h"
@@ -54,6 +58,14 @@ void screensaver_create(lv_obj_t *parent, screensaver_dismiss_cb_t cb,
   dismiss_cb = cb;
   active = true;
 
+#if CONFIG_KERN_A11Y
+  /* Any press dismisses this, and the screen reader swallows presses. Let them
+     through while it is up, or it becomes a screen a reader user cannot
+     leave. */
+  a11y_silence();
+  a11y_set_passthrough(true);
+#endif
+
   int32_t scr_w = theme_screen_width();
   int32_t scr_h = theme_screen_height();
   int32_t logo_sz = theme_logo_size();
@@ -86,6 +98,9 @@ bool screensaver_is_active(void) { return active; }
 
 void screensaver_destroy(void) {
   active = false;
+#if CONFIG_KERN_A11Y
+  a11y_set_passthrough(false);
+#endif
   if (!scr_container)
     return;
   // Stop the ring fade before teardown so no animation callback fires during

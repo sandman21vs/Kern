@@ -45,6 +45,17 @@ void a11y_set_speak_secrets(bool allowed);
 
 bool a11y_speak_secrets(void);
 
+/**
+ * Stop intercepting and let touches reach the screen unchanged, without
+ * turning the reader off.
+ *
+ * For a full-screen overlay whose only interaction is "touch anything to
+ * dismiss me". The reader swallows presses, and that overlay is dismissed by a
+ * press, so without this the screensaver becomes a place a reader user cannot
+ * leave.
+ */
+void a11y_set_passthrough(bool passthrough);
+
 /** Stop talking now. The session lock and the screensaver use this. */
 void a11y_silence(void);
 
