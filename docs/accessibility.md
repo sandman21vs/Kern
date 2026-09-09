@@ -81,11 +81,12 @@ There is no text-to-speech engine on the device and no way to fetch one. The
 voice is a bank of recorded words, baked on a development machine and committed:
 
 - `tools/bake_speech.py` scans `main/` for the strings that reach the user
-  through the menu, dialog, button, label and page-title helpers. 300 strings
-  reduce to 287 distinct words.
+  through the menu, dialog, button, label and page-title helpers. 306 strings
+  reduce to 299 distinct words.
 - With the twenty-six letters, the ten digit names and the words the reader
-  says itself, that is **327 clips, 141 seconds, 1102 KiB** at 16 kHz in 4-bit
-  IMA ADPCM. Worst clip signal-to-noise is 18.7 dB.
+  says itself, that is **339 clips, 127 seconds, 992 KiB** at 16 kHz in 4-bit
+  IMA ADPCM. The 240 wpm voice starts and finishes words sooner while keeping
+  every current interface word in the bank.
 - The blob is linked in, not compiled: `EMBED_FILES` on the device,
   `tools/bin2c.py` at build time for the simulator. As a C array it would be a
   7.2 MB source file, eighty times the largest file in the tree.
@@ -188,8 +189,8 @@ the widget tree rather than annotated onto it, so they cannot go stale.
 ## Configuration
 
 `CONFIG_KERN_A11Y` (default y, depends on `CONFIG_KERN_AUDIO`) compiles the
-reader and the 1.1 MB voice. It costs 0x1e1000 → 0x301000 of the app partition,
-leaving 2.9 MB free.
+reader and the 992 KiB voice. It costs 0x1e1000 → 0x2e1000 of the app partition,
+leaving 0x31f000 (3.1 MiB) free.
 
 Building it in does not turn it on. Two runtime settings, both off by default,
 under **Settings → Accessibility** — which sits before the PIN gate, because
@@ -216,7 +217,7 @@ real clip read out of the committed blob and decoded to the samples the baker
 produced.
 
 `simulator/tests/a11y_touch_smoke.c` covers the touch layer itself, built as
-`kern_sim_a11y_smoke` by the simulator build: 31 checks against a real LVGL
+`kern_sim_a11y_smoke` by the simulator build: 33 checks against a real LVGL
 tree with speech stubbed to a recorder. It lives there rather than in
 `main/a11y/test` because it needs LVGL and the theme, which that suite
 deliberately does without. Both input modes are exercised — the device polls
@@ -224,7 +225,7 @@ its input device, the simulator's SDL mouse is event-driven, and two of the
 bugs it now guards against existed only in the second.
 
 In the simulator, the speech chain has been exercised end to end against SDL —
-327 words load, an utterance takes the wall-clock time its samples say it
+339 words load, an utterance takes the wall-clock time its samples say it
 should, and interrupting a five-word sentence cuts it in 205 ms — and the touch
 state machine against a real LVGL tree with speech stubbed to a recorder, 22
 checks covering exploration, the double tap, the swipe, the corner-button names

@@ -68,14 +68,15 @@ static void test_lookup(void) {
   TEST("the bank is sorted, so lookup can bisect");
   int sorted = 1;
   for (int i = 1; i < SPEECH_CLIP_COUNT; i++)
-    if (strcmp(speech_words[i - 1], speech_words[i]) >= 0)
+    if (strcmp(speech_clips[i - 1].word, speech_clips[i].word) >= 0)
       sorted = 0;
-  CHECK(sorted, "speech_words is not strictly ascending");
+  CHECK(sorted, "speech clips are not strictly ascending");
 
   TEST("every word in the bank finds itself");
   int found = 1;
   for (int i = 0; i < SPEECH_CLIP_COUNT; i++)
-    if (speech_word_index(speech_words[i], strlen(speech_words[i])) != i)
+    if (speech_word_index(speech_clips[i].word, strlen(speech_clips[i].word)) !=
+        i)
       found = 0;
   CHECK(found, "a baked word did not look up to its own index");
 
@@ -272,15 +273,15 @@ static void test_real_clip(void) {
     adpcm_decode(&state, codes, clip.samples, pcm);
 
     /* Values from tools/bake_speech.py decoding the same clip. */
-    const int16_t head[] = {0, 1, -3, 1, 1, -10, 8, -7};
+    const int16_t head[] = {0, -7, 9, 11, -16, -6, 25, 29};
     int peak = 0;
     for (uint16_t i = 0; i < clip.samples; i++) {
       const int magnitude = pcm[i] < 0 ? -pcm[i] : pcm[i];
       if (magnitude > peak)
         peak = magnitude;
     }
-    ok = clip.samples == 5462 && memcmp(pcm, head, sizeof(head)) == 0 &&
-         pcm[clip.samples / 2] == -5072 && peak == 28427;
+    ok = clip.samples == 4731 && memcmp(pcm, head, sizeof(head)) == 0 &&
+         pcm[clip.samples / 2] == 14022 && peak == 27420;
   }
   free(codes);
   free(pcm);

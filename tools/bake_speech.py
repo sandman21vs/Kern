@@ -256,6 +256,7 @@ def emit(entries, voice, rate):
 /* One spoken word. `offset` indexes the clip blob in bytes, `samples` is the
  * decoded length; two ADPCM codes live in each byte. */
 typedef struct {{
+  const char *word;
   uint32_t offset;
   uint16_t samples;
 }} speech_clip_t;
@@ -265,7 +266,6 @@ typedef struct {{
 #define SPEECH_CLIP_BYTES {len(blob)}
 
 /* Sorted by word, so a lookup can bisect. */
-extern const char *const speech_words[SPEECH_CLIP_COUNT];
 extern const speech_clip_t speech_clips[SPEECH_CLIP_COUNT];
 
 /* The ADPCM blob, linked in per platform. See main/a11y/speech_blob.c. */
@@ -276,10 +276,9 @@ const uint8_t *speech_lexicon_blob(void);
 
     lines = [HEADER.format(voice=voice, rate=rate),
              '#include "speech_lexicon.h"\n\n',
-             "const char *const speech_words[SPEECH_CLIP_COUNT] = {\n"]
-    lines += [f'    "{word}",\n' for word, _, _ in clips]
-    lines.append("};\n\nconst speech_clip_t speech_clips[SPEECH_CLIP_COUNT] = {\n")
-    lines += [f"    {{{offset}, {samples}}},\n" for _, offset, samples in clips]
+             "const speech_clip_t speech_clips[SPEECH_CLIP_COUNT] = {\n"]
+    lines += [f'    {{"{word}", {offset}, {samples}}},\n'
+              for word, offset, samples in clips]
     lines.append("};\n")
     (OUT_DIR / "speech_lexicon.c").write_text("".join(lines))
     return blob, clips
@@ -288,7 +287,7 @@ const uint8_t *speech_lexicon_blob(void);
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--voice", default="Samantha")
-    parser.add_argument("--rate", type=int, default=200,
+    parser.add_argument("--rate", type=int, default=240,
                         help="words per minute; faster is smaller, and screen "
                              "reader users tend to prefer it")
     args = parser.parse_args()

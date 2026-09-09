@@ -36,11 +36,11 @@ int speech_word_index(const char *word, size_t len) {
     key[i] = lower(word[i]);
   key[len] = '\0';
 
-  /* speech_words is sorted by the bake, so this bisects. */
+  /* speech_clips is sorted by word, so this bisects. */
   size_t low = 0, high = SPEECH_CLIP_COUNT;
   while (low < high) {
     const size_t mid = low + (high - low) / 2;
-    const int cmp = strcmp(key, speech_words[mid]);
+    const int cmp = strcmp(key, speech_clips[mid].word);
     if (cmp == 0)
       return (int)mid;
     if (cmp < 0)

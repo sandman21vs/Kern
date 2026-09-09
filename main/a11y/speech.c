@@ -4,11 +4,8 @@
 // decodes clip by clip and pushes samples at components/audio, which blocks
 // until the DMA has taken them.
 //
-// Interruption is the whole design. A finger exploring the screen produces a
-// new announcement every few hundred milliseconds, so an utterance has to be
-// abandonable mid-word. That is what the generation counter is for: the task
-// re-checks it between chunks and drops what it was saying the moment a newer
-// utterance exists, rather than finishing a word nobody is pointing at.
+// Interruption is the whole design. A one-item queue always holds the newest
+// announcement; the task checks it every 16 ms and abandons stale speech.
 
 #include "speech.h"
 
@@ -19,7 +16,7 @@
 #include "audio.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 #include "speech_text.h"
 
@@ -42,15 +39,15 @@ static const char *TAG = "SPEECH";
 #define TASK_PRIORITY 4
 #define TASK_CORE 1
 
-/* The pending utterance. Written by callers under `lock`, read by the task. */
-static uint16_t pending[MAX_CLIPS];
-static size_t pending_count;
-static uint32_t generation; /* bumped on every new utterance */
+typedef struct {
+  size_t count;
+  uint16_t clips[MAX_CLIPS];
+} utterance_t;
 
-static SemaphoreHandle_t lock;
-static SemaphoreHandle_t wake;
+static QueueHandle_t commands;
 static TaskHandle_t task;
 static volatile bool running;
+static volatile bool task_exited;
 static bool ready;
 
 /* ---------- Earcons ---------- */
@@ -69,6 +66,7 @@ static const tone_t EARCONS[][2] = {
     [SPEECH_EARCON_ERROR] = {{320, 90}, {240, 110}},
     [SPEECH_EARCON_MASKED] = {{660, 40}, {660, 40}},
 };
+#define EARCON_COUNT (sizeof(EARCONS) / sizeof(EARCONS[0]))
 
 /* A quarter-cycle of sine, enough to build a full one by symmetry. Integer
  * only: no libm, and no float on a task that runs constantly. */
@@ -80,21 +78,20 @@ static int16_t sine(uint32_t phase) {
   return (int16_t)(y > 32767 ? 32767 : (y < -32768 ? -32768 : y));
 }
 
-static void play_tone(const tone_t *tone, uint32_t at_generation);
-
 /* ---------- Playback ---------- */
 
-static bool superseded(uint32_t at_generation) {
-  bool changed;
-  xSemaphoreTake(lock, portMAX_DELAY);
-  changed = generation != at_generation;
-  xSemaphoreGive(lock);
-  return changed;
+static bool take_replacement(utterance_t *next) {
+  if (xQueueReceive(commands, next, 0) != pdTRUE)
+    return false;
+  /* A chunk can land just after submit() clears the device. Clear it again
+   * here so none of the superseded word leaks into the new announcement. */
+  audio_stop();
+  return true;
 }
 
-static void play_clip(uint16_t index, uint32_t at_generation) {
+static bool play_clip(uint16_t index, utterance_t *next) {
   if (index >= SPEECH_CLIP_COUNT)
-    return;
+    return false;
 
   const speech_clip_t clip = speech_clips[index];
   const uint8_t *codes = speech_lexicon_blob() + clip.offset;
@@ -104,20 +101,21 @@ static void play_clip(uint16_t index, uint32_t at_generation) {
   int16_t pcm[CHUNK_SAMPLES];
   size_t left = clip.samples;
   while (left > 0) {
-    if (superseded(at_generation))
-      return;
+    if (take_replacement(next))
+      return true;
     const size_t take = left < CHUNK_SAMPLES ? left : CHUNK_SAMPLES;
     adpcm_decode(&state, codes, take, pcm);
     if (audio_write(pcm, take) != ESP_OK)
-      return;
+      return false;
     codes += (take + 1) / 2; /* take is even except on the last chunk */
     left -= take;
   }
+  return false;
 }
 
-static void play_tone(const tone_t *tone, uint32_t at_generation) {
+static bool play_tone(const tone_t *tone, utterance_t *next) {
   if (tone->hz == 0 || tone->ms == 0)
-    return;
+    return false;
 
   const uint32_t total = (uint32_t)AUDIO_SAMPLE_RATE * tone->ms / 1000;
   const uint32_t step = (uint32_t)tone->hz * 65536 / AUDIO_SAMPLE_RATE;
@@ -126,8 +124,8 @@ static void play_tone(const tone_t *tone, uint32_t at_generation) {
 
   int16_t pcm[CHUNK_SAMPLES];
   for (uint32_t done = 0; done < total;) {
-    if (superseded(at_generation))
-      return;
+    if (take_replacement(next))
+      return true;
     const uint32_t take =
         (total - done) < CHUNK_SAMPLES ? (total - done) : CHUNK_SAMPLES;
     for (uint32_t i = 0; i < take; i++) {
@@ -141,9 +139,10 @@ static void play_tone(const tone_t *tone, uint32_t at_generation) {
       phase += step;
     }
     if (audio_write(pcm, take) != ESP_OK)
-      return;
+      return false;
     done += take;
   }
+  return false;
 }
 
 /* Earcons are pushed as clip indices offset past the lexicon, so one queue
@@ -152,38 +151,38 @@ static void play_tone(const tone_t *tone, uint32_t at_generation) {
 
 static void speech_task(void *arg) {
   (void)arg;
-  uint16_t clips[MAX_CLIPS];
+  utterance_t utterance;
 
   while (running) {
-    if (xSemaphoreTake(wake, portMAX_DELAY) != pdTRUE)
+    if (xQueueReceive(commands, &utterance, portMAX_DELAY) != pdTRUE)
       continue;
     if (!running)
       break;
 
-    xSemaphoreTake(lock, portMAX_DELAY);
-    const size_t count = pending_count;
-    const uint32_t at_generation = generation;
-    memcpy(clips, pending, count * sizeof(clips[0]));
-    pending_count = 0;
-    xSemaphoreGive(lock);
-
-    for (size_t i = 0; i < count; i++) {
-      if (superseded(at_generation))
-        break;
-      if (clips[i] >= EARCON_BASE) {
-        const size_t which = clips[i] - EARCON_BASE;
-        play_tone(&EARCONS[which][0], at_generation);
-        play_tone(&EARCONS[which][1], at_generation);
-      } else {
-        play_clip(clips[i], at_generation);
+    bool replaced;
+    do {
+      replaced = false;
+      for (size_t i = 0; i < utterance.count && !replaced; i++) {
+        const uint16_t clip = utterance.clips[i];
+        if (clip >= EARCON_BASE) {
+          const size_t which = clip - EARCON_BASE;
+          if (which >= EARCON_COUNT)
+            continue;
+          replaced = play_tone(&EARCONS[which][0], &utterance);
+          if (!replaced)
+            replaced = play_tone(&EARCONS[which][1], &utterance);
+        } else {
+          replaced = play_clip(clip, &utterance);
+        }
       }
-    }
-    /* Nothing more to say: drop the amplifier rather than hum between
-     * announcements. */
-    if (!superseded(at_generation))
+      /* take_replacement() has put the new command in `utterance`. */
+    } while (running && replaced);
+
+    if (!replaced)
       audio_stop();
   }
 
+  task_exited = true;
   vTaskDelete(NULL);
 }
 
@@ -192,14 +191,15 @@ static void speech_task(void *arg) {
 static void submit(const uint16_t *clips, size_t count) {
   if (!ready)
     return;
-  xSemaphoreTake(lock, portMAX_DELAY);
-  memcpy(pending, clips, count * sizeof(pending[0]));
-  pending_count = count;
-  generation++;
-  xSemaphoreGive(lock);
-  /* Cut what is playing now; the task notices the generation and stops. */
+
+  utterance_t utterance = {.count = count};
+  if (count)
+    memcpy(utterance.clips, clips, count * sizeof(clips[0]));
+  /* Clear first. If the task writes one last old chunk before seeing the new
+   * command, replacement() clears that late chunk as well. */
   audio_stop();
-  xSemaphoreGive(wake);
+  if (xQueueOverwrite(commands, &utterance) != pdPASS)
+    ESP_LOGW(TAG, "Voice command dropped");
 }
 
 bool speech_init(void) {
@@ -216,14 +216,14 @@ bool speech_init(void) {
     return false;
   }
 
-  lock = xSemaphoreCreateMutex();
-  wake = xSemaphoreCreateBinary();
-  if (!lock || !wake) {
+  commands = xQueueCreate(1, sizeof(utterance_t));
+  if (!commands) {
     speech_deinit();
     return false;
   }
 
   running = true;
+  task_exited = false;
   if (xTaskCreatePinnedToCore(speech_task, "speech", TASK_STACK, NULL,
                               TASK_PRIORITY, &task, TASK_CORE) != pdPASS) {
     running = false;
@@ -237,22 +237,21 @@ bool speech_init(void) {
 }
 
 void speech_deinit(void) {
-  if (running) {
+  ready = false;
+  if (task) {
+    const utterance_t stop = {0};
     running = false;
     audio_stop();
-    xSemaphoreGive(wake);
-    /* The task self-deletes; give it a moment to leave the wait. */
-    vTaskDelay(pdMS_TO_TICKS(50));
+    xQueueOverwrite(commands, &stop);
+    /* Do not free the queue underneath the task. Usually this is one tick;
+     * unlike the old fixed delay, it also remains safe on a busy device. */
+    while (!task_exited)
+      vTaskDelay(1);
     task = NULL;
   }
-  ready = false;
-  if (lock) {
-    vSemaphoreDelete(lock);
-    lock = NULL;
-  }
-  if (wake) {
-    vSemaphoreDelete(wake);
-    wake = NULL;
+  if (commands) {
+    vQueueDelete(commands);
+    commands = NULL;
   }
   audio_deinit();
 }
@@ -269,7 +268,7 @@ void speech_say(const char *text) {
 }
 
 void speech_earcon(speech_earcon_t earcon) {
-  if (!ready)
+  if (!ready || (unsigned)earcon >= EARCON_COUNT)
     return;
   const uint16_t clip = (uint16_t)(EARCON_BASE + earcon);
   submit(&clip, 1);
@@ -278,9 +277,5 @@ void speech_earcon(speech_earcon_t earcon) {
 void speech_silence(void) {
   if (!ready)
     return;
-  xSemaphoreTake(lock, portMAX_DELAY);
-  pending_count = 0;
-  generation++;
-  xSemaphoreGive(lock);
-  audio_stop();
+  submit(NULL, 0);
 }
