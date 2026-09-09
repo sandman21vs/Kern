@@ -3,6 +3,15 @@ list(FILTER SOURCES EXCLUDE REGEX ".*/core/test/.*")
 list(FILTER SOURCES EXCLUDE REGEX ".*/qr/test/.*")
 list(FILTER SOURCES EXCLUDE REGEX ".*/a11y/test/.*")
 
+# The baked voice is over a megabyte of flash, so a build without the screen
+# reader should not carry it.
+if(CONFIG_KERN_A11Y)
+    set(A11Y_EMBED "a11y/assets/speech_lexicon.bin")
+else()
+    set(A11Y_EMBED "")
+    list(FILTER SOURCES EXCLUDE REGEX ".*/a11y/.*")
+endif()
+
 # Select touch driver based on board
 if(CONFIG_KERN_BOARD_WAVE_4B)
     set(TOUCH_DRIVER esp_lcd_touch_gt911)
@@ -36,7 +45,8 @@ idf_component_register(
     PRIV_REQUIRES lvgl ${TOUCH_DRIVER} k_quirc esp_timer wave_4b wave_35 wave_5 wave_43
                   crowpanel wave_7b libwally-core cUR sd_card bbqr deflate_codec video spiffs
                   nvs_flash efuse esp_hw_support esp_app_format mbedtls
-                  esp_driver_ppa app_update bootloader_support
+                  esp_driver_ppa app_update bootloader_support audio
+    EMBED_FILES ${A11Y_EMBED}
 )
 
 # Ignoring a warn_unused_result return is a build error, not a warning. The

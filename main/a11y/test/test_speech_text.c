@@ -20,6 +20,7 @@
 #include "speech_lexicon.h"
 #include "speech_text.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int tests_passed = 0;
@@ -236,12 +237,63 @@ static void test_bank(void) {
   CHECK(nonempty, "a word rendered to nothing");
 }
 
+/* The blob is not linked into the host suite - it is a binary asset the device
+ * embeds - so this reads it off disk. The point is to prove that an offset in
+ * the index, the ADPCM decoder and the bytes on disk agree: a clip that
+ * decodes to silence or to noise would sound like a broken feature and look
+ * like a working build. */
+static void test_real_clip(void) {
+  TEST("a word from the bank decodes to the samples the baker produced");
+  FILE *f = fopen("../assets/speech_lexicon.bin", "rb");
+  if (!f) {
+    FAIL("cannot open ../assets/speech_lexicon.bin");
+    return;
+  }
+
+  const int index = speech_word_index("save", 4);
+  const speech_clip_t clip = speech_clips[index];
+  const size_t bytes = (clip.samples + 1) / 2;
+  uint8_t *codes = malloc(bytes);
+  int16_t *pcm = malloc(clip.samples * sizeof(int16_t));
+  if (!codes || !pcm) {
+    FAIL("out of memory");
+    free(codes);
+    free(pcm);
+    fclose(f);
+    return;
+  }
+
+  int ok = fseek(f, clip.offset, SEEK_SET) == 0 &&
+           fread(codes, 1, bytes, f) == bytes;
+  fclose(f);
+  if (ok) {
+    adpcm_state_t state;
+    adpcm_reset(&state);
+    adpcm_decode(&state, codes, clip.samples, pcm);
+
+    /* Values from tools/bake_speech.py decoding the same clip. */
+    const int16_t head[] = {0, 1, -3, 1, 1, -10, 8, -7};
+    int peak = 0;
+    for (uint16_t i = 0; i < clip.samples; i++) {
+      const int magnitude = pcm[i] < 0 ? -pcm[i] : pcm[i];
+      if (magnitude > peak)
+        peak = magnitude;
+    }
+    ok = clip.samples == 5462 && memcmp(pcm, head, sizeof(head)) == 0 &&
+         pcm[clip.samples / 2] == -5072 && peak == 28427;
+  }
+  free(codes);
+  free(pcm);
+  CHECK(ok, "the clip on disk did not decode to what the bake produced");
+}
+
 int main(void) {
   printf("=== Spoken text layout tests ===\n\n");
   test_lookup();
   test_layout();
   test_adpcm();
   test_bank();
+  test_real_clip();
   printf("\nPassed: %d, Failed: %d\n", tests_passed, tests_failed);
   return tests_failed == 0 ? 0 : 1;
 }

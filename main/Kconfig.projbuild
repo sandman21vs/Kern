@@ -25,6 +25,26 @@ menu "Kern Configuration"
             bool "Waveshare ESP32-P4-WiFi6-Touch-LCD-7B (1024x600 MIPI DSI)"
     endchoice
 
+    config KERN_A11Y
+        bool "Enable the spoken screen reader"
+        depends on KERN_AUDIO
+        default y
+        help
+            Compile the screen reader: the spoken lexicon, the speech queue and
+            the touch layer that reads the interface aloud, for someone who
+            cannot see it.
+
+            Building it in does not turn it on. The reader stays silent until
+            it is enabled at runtime under Settings -> Accessibility, which is
+            off by default, and the amplifier is powered only while a word is
+            actually being said.
+
+            Costs about 1.1 MB of flash for the baked voice. Turn it off on a
+            build that needs the room.
+
+            Needs a speaker wired to the board's speaker header, and a board
+            with the codec: see components/audio.
+
     config KERN_PBKDF2_HW_SHA
         bool "Drive PBKDF2-HMAC-SHA256 on the P4 SHA accelerator"
         default y

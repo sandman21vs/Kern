@@ -1,0 +1,286 @@
+// The voice — see speech.h
+//
+// One task owns the speaker. Callers hand it an utterance and return; the task
+// decodes clip by clip and pushes samples at components/audio, which blocks
+// until the DMA has taken them.
+//
+// Interruption is the whole design. A finger exploring the screen produces a
+// new announcement every few hundred milliseconds, so an utterance has to be
+// abandonable mid-word. That is what the generation counter is for: the task
+// re-checks it between chunks and drops what it was saying the moment a newer
+// utterance exists, rather than finishing a word nobody is pointing at.
+
+#include "speech.h"
+
+#include <string.h>
+
+#include "adpcm.h"
+#include "assets/speech_lexicon.h"
+#include "audio.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
+#include "speech_text.h"
+
+#ifndef SIMULATOR
+#include <bsp/esp-bsp.h>
+#endif
+
+static const char *TAG = "SPEECH";
+
+/* Longest utterance laid out at once. A dialog body is the long case; past
+ * this it is truncated, which is better than a reader that will not stop. */
+#define MAX_CLIPS 96
+
+/* Samples decoded per audio_write(). Even, so each chunk starts on a byte
+ * boundary in the ADPCM stream. 16 ms of sound: short enough that an
+ * interruption is inaudible, long enough not to thrash the I2S queue. */
+#define CHUNK_SAMPLES 256
+
+#define TASK_STACK 4096
+#define TASK_PRIORITY 4
+#define TASK_CORE 1
+
+/* The pending utterance. Written by callers under `lock`, read by the task. */
+static uint16_t pending[MAX_CLIPS];
+static size_t pending_count;
+static uint32_t generation; /* bumped on every new utterance */
+
+static SemaphoreHandle_t lock;
+static SemaphoreHandle_t wake;
+static TaskHandle_t task;
+static volatile bool running;
+static bool ready;
+
+/* ---------- Earcons ---------- */
+
+/* Synthesised rather than baked: they are a few hundred samples of sine and
+ * would otherwise be five more entries in a bank measured in megabytes. */
+typedef struct {
+  uint16_t hz;
+  uint16_t ms;
+} tone_t;
+
+static const tone_t EARCONS[][2] = {
+    [SPEECH_EARCON_FOCUS] = {{1200, 18}, {0, 0}},
+    [SPEECH_EARCON_BOUNDARY] = {{440, 60}, {0, 0}},
+    [SPEECH_EARCON_ACTIVATE] = {{880, 35}, {1320, 45}},
+    [SPEECH_EARCON_ERROR] = {{320, 90}, {240, 110}},
+    [SPEECH_EARCON_MASKED] = {{660, 40}, {660, 40}},
+};
+
+/* A quarter-cycle of sine, enough to build a full one by symmetry. Integer
+ * only: no libm, and no float on a task that runs constantly. */
+static int16_t sine(uint32_t phase) {
+  /* phase is 0..65535 over one cycle. Three-term parabola approximation,
+   * within about 1% of sin() — inaudible on a beep. */
+  int32_t x = (int32_t)(phase & 0xFFFF) - 32768; /* -32768..32767 */
+  int32_t y = (x * (98304 - ((x < 0 ? -x : x) * 3))) >> 16;
+  return (int16_t)(y > 32767 ? 32767 : (y < -32768 ? -32768 : y));
+}
+
+static void play_tone(const tone_t *tone, uint32_t at_generation);
+
+/* ---------- Playback ---------- */
+
+static bool superseded(uint32_t at_generation) {
+  bool changed;
+  xSemaphoreTake(lock, portMAX_DELAY);
+  changed = generation != at_generation;
+  xSemaphoreGive(lock);
+  return changed;
+}
+
+static void play_clip(uint16_t index, uint32_t at_generation) {
+  if (index >= SPEECH_CLIP_COUNT)
+    return;
+
+  const speech_clip_t clip = speech_clips[index];
+  const uint8_t *codes = speech_lexicon_blob() + clip.offset;
+  adpcm_state_t state;
+  adpcm_reset(&state);
+
+  int16_t pcm[CHUNK_SAMPLES];
+  size_t left = clip.samples;
+  while (left > 0) {
+    if (superseded(at_generation))
+      return;
+    const size_t take = left < CHUNK_SAMPLES ? left : CHUNK_SAMPLES;
+    adpcm_decode(&state, codes, take, pcm);
+    if (audio_write(pcm, take) != ESP_OK)
+      return;
+    codes += (take + 1) / 2; /* take is even except on the last chunk */
+    left -= take;
+  }
+}
+
+static void play_tone(const tone_t *tone, uint32_t at_generation) {
+  if (tone->hz == 0 || tone->ms == 0)
+    return;
+
+  const uint32_t total = (uint32_t)AUDIO_SAMPLE_RATE * tone->ms / 1000;
+  const uint32_t step = (uint32_t)tone->hz * 65536 / AUDIO_SAMPLE_RATE;
+  const uint32_t fade = total / 8; /* keep the ends from clicking */
+  uint32_t phase = 0;
+
+  int16_t pcm[CHUNK_SAMPLES];
+  for (uint32_t done = 0; done < total;) {
+    if (superseded(at_generation))
+      return;
+    const uint32_t take =
+        (total - done) < CHUNK_SAMPLES ? (total - done) : CHUNK_SAMPLES;
+    for (uint32_t i = 0; i < take; i++) {
+      const uint32_t at = done + i;
+      int32_t sample = sine(phase) / 4; /* earcons sit under speech */
+      if (at < fade)
+        sample = sample * (int32_t)at / (int32_t)fade;
+      else if (at > total - fade)
+        sample = sample * (int32_t)(total - at) / (int32_t)fade;
+      pcm[i] = (int16_t)sample;
+      phase += step;
+    }
+    if (audio_write(pcm, take) != ESP_OK)
+      return;
+    done += take;
+  }
+}
+
+/* Earcons are pushed as clip indices offset past the lexicon, so one queue
+ * carries both and an earcon interrupts speech exactly like a word does. */
+#define EARCON_BASE 0xF000
+
+static void speech_task(void *arg) {
+  (void)arg;
+  uint16_t clips[MAX_CLIPS];
+
+  while (running) {
+    if (xSemaphoreTake(wake, portMAX_DELAY) != pdTRUE)
+      continue;
+    if (!running)
+      break;
+
+    xSemaphoreTake(lock, portMAX_DELAY);
+    const size_t count = pending_count;
+    const uint32_t at_generation = generation;
+    memcpy(clips, pending, count * sizeof(clips[0]));
+    pending_count = 0;
+    xSemaphoreGive(lock);
+
+    for (size_t i = 0; i < count; i++) {
+      if (superseded(at_generation))
+        break;
+      if (clips[i] >= EARCON_BASE) {
+        const size_t which = clips[i] - EARCON_BASE;
+        play_tone(&EARCONS[which][0], at_generation);
+        play_tone(&EARCONS[which][1], at_generation);
+      } else {
+        play_clip(clips[i], at_generation);
+      }
+    }
+    /* Nothing more to say: drop the amplifier rather than hum between
+     * announcements. */
+    if (!superseded(at_generation))
+      audio_stop();
+  }
+
+  vTaskDelete(NULL);
+}
+
+/* ---------- Public API ---------- */
+
+static void submit(const uint16_t *clips, size_t count) {
+  if (!ready)
+    return;
+  xSemaphoreTake(lock, portMAX_DELAY);
+  memcpy(pending, clips, count * sizeof(pending[0]));
+  pending_count = count;
+  generation++;
+  xSemaphoreGive(lock);
+  /* Cut what is playing now; the task notices the generation and stops. */
+  audio_stop();
+  xSemaphoreGive(wake);
+}
+
+bool speech_init(void) {
+  if (ready)
+    return true;
+
+#ifdef SIMULATOR
+  const esp_err_t ret = audio_init(NULL);
+#else
+  const esp_err_t ret = audio_init(bsp_i2c_get_handle());
+#endif
+  if (ret != ESP_OK) {
+    ESP_LOGW(TAG, "No speaker: %s", esp_err_to_name(ret));
+    return false;
+  }
+
+  lock = xSemaphoreCreateMutex();
+  wake = xSemaphoreCreateBinary();
+  if (!lock || !wake) {
+    speech_deinit();
+    return false;
+  }
+
+  running = true;
+  if (xTaskCreatePinnedToCore(speech_task, "speech", TASK_STACK, NULL,
+                              TASK_PRIORITY, &task, TASK_CORE) != pdPASS) {
+    running = false;
+    speech_deinit();
+    return false;
+  }
+
+  ready = true;
+  ESP_LOGI(TAG, "Voice ready, %d words", SPEECH_CLIP_COUNT);
+  return true;
+}
+
+void speech_deinit(void) {
+  if (running) {
+    running = false;
+    audio_stop();
+    xSemaphoreGive(wake);
+    /* The task self-deletes; give it a moment to leave the wait. */
+    vTaskDelay(pdMS_TO_TICKS(50));
+    task = NULL;
+  }
+  ready = false;
+  if (lock) {
+    vSemaphoreDelete(lock);
+    lock = NULL;
+  }
+  if (wake) {
+    vSemaphoreDelete(wake);
+    wake = NULL;
+  }
+  audio_deinit();
+}
+
+bool speech_available(void) { return ready; }
+
+void speech_say(const char *text) {
+  if (!ready || !text)
+    return;
+  uint16_t clips[MAX_CLIPS];
+  const size_t count = speech_text_to_clips(text, clips, MAX_CLIPS);
+  if (count)
+    submit(clips, count);
+}
+
+void speech_earcon(speech_earcon_t earcon) {
+  if (!ready)
+    return;
+  const uint16_t clip = (uint16_t)(EARCON_BASE + earcon);
+  submit(&clip, 1);
+}
+
+void speech_silence(void) {
+  if (!ready)
+    return;
+  xSemaphoreTake(lock, portMAX_DELAY);
+  pending_count = 0;
+  generation++;
+  xSemaphoreGive(lock);
+  audio_stop();
+}

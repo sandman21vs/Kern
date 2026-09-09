@@ -162,10 +162,28 @@ set(STUB_SOURCES
 # --- Application utilities ---
 # Screen reader: the pure layers only. The queue and the touch intercept
 # arrive with the reader itself.
+# The device embeds the voice with EMBED_FILES. CMake has no equivalent, so
+# the blob becomes a C array in the build directory; nothing generated here is
+# committed.
+set(SPEECH_BLOB_C ${CMAKE_CURRENT_BINARY_DIR}/generated/speech_lexicon_blob.c)
+add_custom_command(
+    OUTPUT ${SPEECH_BLOB_C}
+    COMMAND ${CMAKE_COMMAND} -E env python3
+            ${CMAKE_CURRENT_SOURCE_DIR}/../tools/bin2c.py
+            ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/assets/speech_lexicon.bin
+            ${SPEECH_BLOB_C} --name speech_lexicon_bin
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/assets/speech_lexicon.bin
+            ${CMAKE_CURRENT_SOURCE_DIR}/../tools/bin2c.py
+    COMMENT "Generating speech lexicon blob"
+)
+
 set(APP_A11Y_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/adpcm.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/speech_text.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/speech.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/speech_blob.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/assets/speech_lexicon.c
+    ${SPEECH_BLOB_C}
 )
 
 set(APP_UTIL_SOURCES

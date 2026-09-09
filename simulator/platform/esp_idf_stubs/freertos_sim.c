@@ -153,6 +153,19 @@ SemaphoreHandle_t xSemaphoreCreateBinary(void) {
     return s;
 }
 
+/* A counting semaphore that starts available, which is what a mutex is for the
+ * uses main/ puts one to: guard a short critical section, never recursively,
+ * and always taken and given on the same thread. */
+SemaphoreHandle_t xSemaphoreCreateMutex(void) {
+    sem_impl_t *s = calloc(1, sizeof(sem_impl_t));
+    if (!s) return NULL;
+    pthread_mutex_init(&s->mutex, NULL);
+    pthread_cond_init(&s->cond, NULL);
+    s->value     = 1;
+    s->is_binary = true;
+    return s;
+}
+
 BaseType_t xSemaphoreTake(SemaphoreHandle_t sem, TickType_t timeout) {
     sem_impl_t *s = (sem_impl_t *)sem;
     if (!s) return pdFAIL;
