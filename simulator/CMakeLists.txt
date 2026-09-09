@@ -160,6 +160,14 @@ set(STUB_SOURCES
 )
 
 # --- Application utilities ---
+# Screen reader: the pure layers only. The queue and the touch intercept
+# arrive with the reader itself.
+set(APP_A11Y_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/adpcm.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/speech_text.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/a11y/assets/speech_lexicon.c
+)
+
 set(APP_UTIL_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/utils/bip39_filter.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/utils/dice_quality.c
@@ -365,6 +373,7 @@ add_executable(kern_simulator
     ${SIM_SOURCES}
     ${STUB_SOURCES}
     ${APP_UTIL_SOURCES}
+    ${APP_A11Y_SOURCES}
     ${APP_CORE_SOURCES}
     ${APP_UI_SOURCES}
     ${PIN_PAGE_SOURCES}

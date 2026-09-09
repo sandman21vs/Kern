@@ -45,6 +45,8 @@ main/core/test/test_bip322
 main/core/test/test_estimated_entropy
 main/core/test/test_pin_attempt
 main/core/test/test_kef
+main/a11y/test/test_speech_text
+*.dSYM/
 main/core/test/combined.o
 main/core/test/libwally.a
 

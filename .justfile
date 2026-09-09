@@ -54,6 +54,7 @@ clean:
     make -C components/bbqr/test clean
     make -C main/qr/test clean
     make -C main/core/test clean
+    make -C main/a11y/test clean
 
 # Stages branding and any locally built firmware into site/ the same way the
 # deploy-site job in .github/workflows/test-all-builds.yml does, so what you see

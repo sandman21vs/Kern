@@ -19,4 +19,7 @@ make -C "$REPO_ROOT/main/qr/test" run
 echo "Running core tests..."
 make -C "$REPO_ROOT/main/core/test" run
 
+echo "Running screen reader text tests..."
+make -C "$REPO_ROOT/main/a11y/test" run
+
 echo "All tests passed!"
