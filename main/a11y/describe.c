@@ -52,6 +52,55 @@ static size_t collect_labels(lv_obj_t *obj, char *out, size_t max, size_t at) {
   return at;
 }
 
+/* Names for controls that carry no text of their own. Small and fixed: only
+ * the four corner buttons use it, and a screen holds at most a couple. Each
+ * entry clears itself when its object is deleted, so a recycled address can
+ * never inherit someone else's name. */
+#define MAX_NAMES 16
+
+static struct {
+  lv_obj_t *obj;
+  const char *name;
+} names[MAX_NAMES];
+
+static void forget_name(lv_event_t *e) {
+  lv_obj_t *obj = lv_event_get_target(e);
+  for (size_t i = 0; i < MAX_NAMES; i++)
+    if (names[i].obj == obj) {
+      names[i].obj = NULL;
+      names[i].name = NULL;
+      return;
+    }
+}
+
+void a11y_label(lv_obj_t *obj, const char *name) {
+  if (!obj || !name)
+    return;
+  for (size_t i = 0; i < MAX_NAMES; i++) {
+    if (names[i].obj == obj) {
+      names[i].name = name;
+      return;
+    }
+  }
+  for (size_t i = 0; i < MAX_NAMES; i++) {
+    if (!names[i].obj) {
+      names[i].obj = obj;
+      names[i].name = name;
+      lv_obj_add_event_cb(obj, forget_name, LV_EVENT_DELETE, NULL);
+      return;
+    }
+  }
+  /* Full. Dropping the name costs a silent control, which is better than
+   * evicting one that is still on screen. */
+}
+
+static const char *name_of(lv_obj_t *obj) {
+  for (size_t i = 0; i < MAX_NAMES; i++)
+    if (names[i].obj == obj)
+      return names[i].name;
+  return NULL;
+}
+
 bool a11y_is_stop(lv_obj_t *obj) {
   if (!obj || lv_obj_has_flag(obj, LV_OBJ_FLAG_HIDDEN))
     return false;
@@ -65,6 +114,8 @@ bool a11y_is_stop(lv_obj_t *obj) {
   /* Anything the user can operate is a stop, and the reader does not look
    * inside it: a menu entry should read as one thing, not as an icon and then
    * a word. */
+  if (name_of(obj))
+    return true;
   return lv_obj_has_flag(obj, LV_OBJ_FLAG_CLICKABLE) ||
          lv_obj_check_type(obj, &lv_switch_class) ||
          lv_obj_check_type(obj, &lv_dropdown_class) ||
@@ -76,7 +127,9 @@ size_t a11y_describe(lv_obj_t *obj, char *out, size_t max) {
     return 0;
   out[0] = '\0';
 
-  size_t at = collect_labels(obj, out, max, 0);
+  const char *given = name_of(obj);
+  size_t at =
+      given ? append(out, max, 0, given) : collect_labels(obj, out, max, 0);
 
   if (lv_obj_check_type(obj, &lv_switch_class))
     at = append(out, max, at,

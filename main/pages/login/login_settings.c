@@ -9,6 +9,9 @@
 #include "../../ui/theme_widgets.h"
 #include "../../utils/session.h"
 #include "../settings/firmware_update.h"
+/* CONFIG_KERN_A11Y. Not force-included by either build, and testing a
+ * CONFIG_ macro that was never defined is a silently disabled feature. */
+#include "sdkconfig.h"
 #if CONFIG_KERN_A11Y
 #include "a11y_settings.h"
 #endif

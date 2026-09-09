@@ -303,6 +303,7 @@ set(APP_PAGE_SOURCES
     # Login flow
     ${APP_PAGES_DIR}/login/login.c
     ${APP_PAGES_DIR}/login/login_scan.c
+    ${APP_PAGES_DIR}/login/a11y_settings.c
     ${APP_PAGES_DIR}/login/login_settings.c
     ${APP_PAGES_DIR}/login/security_settings.c
     ${APP_PAGES_DIR}/login/about.c

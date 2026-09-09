@@ -1,6 +1,12 @@
 // UI Menu Component - Touch menu for LVGL
 
 #include "menu.h"
+/* CONFIG_KERN_A11Y. Not force-included by either build, and testing a
+ * CONFIG_ macro that was never defined is a silently disabled feature. */
+#include "sdkconfig.h"
+#if CONFIG_KERN_A11Y
+#include "../a11y/a11y.h"
+#endif
 #include "input_helpers.h"
 #include "theme_widgets.h"
 #include <stdint.h>
@@ -273,6 +279,13 @@ ui_menu_t *ui_menu_create(lv_obj_t *parent, const char *title,
                           ui_menu_callback_t back_cb) {
   if (!parent || !title)
     return NULL;
+
+#if CONFIG_KERN_A11Y
+  // Every menu in the app is built here, so one announcement covers all 22.
+  // The main menu passes an empty title and says nothing, which is right: its
+  // header is the key info bar, not a name.
+  a11y_announce(title);
+#endif
 
   ui_menu_t *menu = calloc(1, sizeof(ui_menu_t));
   if (!menu)

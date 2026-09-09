@@ -1,4 +1,10 @@
 #include "theme_widgets.h"
+/* CONFIG_KERN_A11Y. Not force-included by either build, and testing a
+ * CONFIG_ macro that was never defined is a silently disabled feature. */
+#include "sdkconfig.h"
+#if CONFIG_KERN_A11Y
+#include "../a11y/a11y.h"
+#endif
 #include "theme_palette.h"
 
 typedef struct {
@@ -300,6 +306,13 @@ lv_obj_t *theme_create_label(lv_obj_t *parent, const char *text,
 }
 
 lv_obj_t *theme_create_page_title(lv_obj_t *parent, const char *text) {
+#if CONFIG_KERN_A11Y
+  // A page appearing is the one thing exploring by touch cannot tell you: the
+  // finger is not on the screen when it happens. Nearly every page in the tree
+  // builds its title through here, which is why the announcement lives here
+  // rather than in forty page files.
+  a11y_announce(text);
+#endif
   // Secondary (grey) so titles read as quiet section headers and don't compete
   // with the white button text below them. Matches the ui_menu title colour.
   lv_obj_t *label = theme_create_label(parent, text ? text : "", true);

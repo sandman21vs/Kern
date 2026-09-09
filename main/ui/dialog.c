@@ -1,5 +1,11 @@
 #include "dialog.h"
 #include "theme_widgets.h"
+/* CONFIG_KERN_A11Y. Not force-included by either build, and testing a
+ * CONFIG_ macro that was never defined is a silently disabled feature. */
+#include "sdkconfig.h"
+#if CONFIG_KERN_A11Y
+#include "../a11y/a11y.h"
+#endif
 #include <lvgl.h>
 #include <stdlib.h>
 
@@ -143,6 +149,15 @@ static void show_info_internal(const char *title, const char *message,
   if (!message)
     return;
 
+#if CONFIG_KERN_A11Y
+  // A modal that appears in silence is a trap: the screen under the finger
+  // changed and nothing said so. Title and body go out as one utterance
+  // rather than two, so the second cannot cut the first off.
+  char spoken[192];
+  lv_snprintf(spoken, sizeof(spoken), "%s %s", title ? title : "", message);
+  a11y_announce(spoken);
+#endif
+
   lv_obj_t *root;
   lv_obj_t *dialog = create_dialog_container(style, &root);
   dialog_context_t *ctx = dialog_context_create(root);
@@ -260,6 +275,13 @@ static void show_confirm_internal(const char *message,
                                   bool danger) {
   if (!message)
     return;
+
+#if CONFIG_KERN_A11Y
+  char spoken[192];
+  lv_snprintf(spoken, sizeof(spoken), "%s %s", danger ? "Warning" : "Confirm",
+              message);
+  a11y_announce(spoken);
+#endif
 
   lv_obj_t *root;
   lv_obj_t *dialog = create_dialog_container(style, &root);

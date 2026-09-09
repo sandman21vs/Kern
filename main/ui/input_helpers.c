@@ -3,6 +3,12 @@
 #include "input_helpers.h"
 #include "assets/icons.h"
 #include "theme_widgets.h"
+/* CONFIG_KERN_A11Y. Not force-included by either build, and testing a
+ * CONFIG_ macro that was never defined is a silently disabled feature. */
+#include "sdkconfig.h"
+#if CONFIG_KERN_A11Y
+#include "../a11y/describe.h"
+#endif
 
 // Compact keyboard maps shared by all boards.
 // Trade fewer keys per row for wider touch targets.
@@ -90,7 +96,7 @@ static const lv_buttonmatrix_ctrl_t compact_kb_ctrl_spec_map[] = {
 // Corner buttons (back/power top-left, settings top-right) all share the
 // secondary grey style so they read as one consistent control class.
 static lv_obj_t *create_corner_button(lv_obj_t *parent, lv_align_t align,
-                                      const char *symbol,
+                                      const char *symbol, const char *name,
                                       lv_event_cb_t event_cb) {
   if (!parent)
     return NULL;
@@ -119,26 +125,35 @@ static lv_obj_t *create_corner_button(lv_obj_t *parent, lv_align_t align,
   if (event_cb)
     lv_obj_add_event_cb(btn, event_cb, LV_EVENT_CLICKED, NULL);
 
+#if CONFIG_KERN_A11Y
+  /* Nothing in here but a glyph, so the screen reader has to be told what it
+     is. Without this the way back off a page is silent. */
+  a11y_label(btn, name);
+#else
+  (void)name;
+#endif
+
   return btn;
 }
 
 lv_obj_t *ui_create_back_button(lv_obj_t *parent, lv_event_cb_t event_cb) {
-  return create_corner_button(parent, LV_ALIGN_TOP_LEFT, LV_SYMBOL_LEFT,
+  return create_corner_button(parent, LV_ALIGN_TOP_LEFT, LV_SYMBOL_LEFT, "Back",
                               event_cb);
 }
 
 lv_obj_t *ui_create_power_button(lv_obj_t *parent, lv_event_cb_t event_cb) {
   return create_corner_button(parent, LV_ALIGN_TOP_LEFT, LV_SYMBOL_POWER,
-                              event_cb);
+                              "Power", event_cb);
 }
 
 lv_obj_t *ui_create_settings_button(lv_obj_t *parent, lv_event_cb_t event_cb) {
   return create_corner_button(parent, LV_ALIGN_TOP_RIGHT, LV_SYMBOL_SETTINGS,
-                              event_cb);
+                              "Settings", event_cb);
 }
 
 lv_obj_t *ui_create_info_button(lv_obj_t *parent, lv_event_cb_t event_cb) {
-  return create_corner_button(parent, LV_ALIGN_TOP_RIGHT, ICON_INFO, event_cb);
+  return create_corner_button(parent, LV_ALIGN_TOP_RIGHT, ICON_INFO, "About",
+                              event_cb);
 }
 
 // Swipe and tap travel scale with the touch target, so a gesture spans the same

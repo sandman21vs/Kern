@@ -16,3 +16,8 @@
 
 /* I2C */
 #define CONFIG_BSP_I2C_NUM 0
+
+/* Screen reader. On in the simulator: it is the only place the reader can be
+ * developed without a board and a speaker soldered to it. Still off at
+ * runtime until Settings -> Accessibility turns it on. */
+#define CONFIG_KERN_A11Y 1
