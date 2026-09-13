@@ -45,17 +45,25 @@ void descriptor_loader_process_string_watch_only(
 
 /**
  * Show a source selection menu for loading descriptors.
- * Presents QR / Flash / SD Card options.
+ * Presents QR / Flash / SD Card, and NFC Card when the caller offers it.
+ *
+ * nfc_cb is nullable rather than compiled out, so this signature is the same
+ * in every build — the simulator does not define CONFIG_KERN_NFC, and a shared
+ * function whose shape depends on a config is the one thing worth avoiding
+ * here. Callers that support cards pass a callback when the setting is on;
+ * everyone else passes NULL and the entry does not appear.
  *
  * @param parent   Parent LVGL object for the menu
  * @param qr_cb    Called when "From QR Code" is selected
  * @param flash_cb Called when "From Flash" is selected
  * @param sd_cb    Called when "From SD Card" is selected
+ * @param nfc_cb   Called when "From NFC Card" is selected; NULL hides it
  * @param back_cb  Called when user dismisses the menu
  */
 void descriptor_loader_show_source_menu(lv_obj_t *parent, void (*qr_cb)(void),
                                         void (*flash_cb)(void),
                                         void (*sd_cb)(void),
+                                        void (*nfc_cb)(void),
                                         void (*back_cb)(void));
 
 /**

@@ -773,6 +773,7 @@ static ui_menu_t *source_menu = NULL;
 void descriptor_loader_show_source_menu(lv_obj_t *parent, void (*qr_cb)(void),
                                         void (*flash_cb)(void),
                                         void (*sd_cb)(void),
+                                        void (*nfc_cb)(void),
                                         void (*back_cb)(void)) {
   descriptor_loader_destroy_source_menu();
   session_cleanup_register(descriptor_loader_destroy_source_menu);
@@ -785,6 +786,10 @@ void descriptor_loader_show_source_menu(lv_obj_t *parent, void (*qr_cb)(void),
   ui_menu_add_entry_with_icon(source_menu, LV_SYMBOL_DRIVE, "From Flash",
                               flash_cb);
   ui_menu_add_entry_with_icon(source_menu, ICON_SD_CARD, "From SD Card", sd_cb);
+  /* "N" is the N-Mark as a letter the theme font already renders; same choice
+     as the mnemonic load menu. */
+  if (nfc_cb)
+    ui_menu_add_entry_with_icon(source_menu, "N", "From NFC Card", nfc_cb);
   ui_menu_show(source_menu);
 }
 

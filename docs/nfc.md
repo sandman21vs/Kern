@@ -17,10 +17,10 @@
 > approach can be looked at and argued with; the author takes no responsibility
 > for what anyone else does with it.
 
-Keeps KEF-encrypted seed backups on NFC cards, read and written through an
-external M5Stack RFID Unit 2 (WS1850S) on the board's I2C bus. The card is a
-third destination alongside flash and SD: same envelope, same password prompt,
-different medium.
+Keeps KEF-encrypted seed backups and wallet output descriptors on NFC cards,
+read and written through an external M5Stack RFID Unit 2 (WS1850S) on the
+board's I2C bus. The card is a third destination alongside flash and SD: same
+envelope, same password prompt, different medium.
 
 **Off by default.** The driver is compiled in, but nothing happens until the
 toggle under **Settings → NFC** is switched on.
@@ -38,8 +38,13 @@ this feature sits in tension with that rule and is deliberately narrow:
   a device that locks while a card page is open does not keep an antenna live.
 - The reader is attached to the I2C bus lazily, in that same page. With the
   toggle off, `nfc_init()` never runs.
-- Only the KEF envelope crosses the antenna. The mnemonic is converted to
-  compact SeedQR entropy, encrypted, and wiped before the reader is touched.
+- The seed never crosses the antenna in the clear. It is converted to compact
+  SeedQR entropy, encrypted, and wiped before the reader is touched, and no
+  path in Kern writes a mnemonic to a card unsealed.
+- A descriptor may cross in the clear, at the user's explicit choice and behind
+  a warning. That is a deliberate difference: a descriptor is public data by
+  design — it is what you hand a coordinator — where a seed is not. The privacy
+  cost is real and named below.
 - The module is external. Unplugged, the feature reports "no reader" and stops.
 
 What it is not: a network interface. There is no routing, no pairing and no
@@ -118,11 +123,45 @@ A 16-byte header at linear offset 0, payload immediately after:
 
 ```
 0..3    magic "KRN1"
-4       record type (1 = KEF envelope)
+4       record type
 5       reserved, must be zero
 6..7    payload length, big endian
 8..15   reserved, must be zero
 ```
+
+### What a card can hold
+
+| Type | Record | Written from | Read from |
+|------|--------|--------------|-----------|
+| 1 | KEF envelope (seed) | Back Up → Save to NFC | Load Mnemonic → From NFC Card |
+| 2 | Wallet descriptor, sealed or plaintext | Session Descriptors → *pick one* → Save to NFC Card | Load Descriptor → From NFC Card |
+| 3 | Datum | *reserved* | *reserved* |
+| 4 | Extended public key | *reserved* | *reserved* |
+
+The magic tags the format, not the device, so these numbers are shared with the
+[Krux fork](https://github.com/sandman21vs/krux) that writes the same cards.
+Kern writes 1 and 2. Types 3 and 4 are **reserved rather than unused**: Krux
+writes them, so a card carrying one has a meaning Kern must not reassign later.
+Kern refuses them on read — a datum card reads as no record — but the numbers
+are pinned by a golden-vector test so a future feature cannot quietly take one.
+
+### A type is a parser, not a permission
+
+Each record carries its type, and a reader names the type it can parse. A
+record of any other type reads exactly as a blank card does — so a descriptor
+card offered to the mnemonic loader, or a seed card offered to the wallet, is
+refused at the header, before anything is allocated and before any password is
+asked for.
+
+What a type buys is a parser, and nothing more. Whatever comes off a card still
+faces the same validation the same bytes would face arriving by QR or SD: raw
+BIP-39 entropy of 16 or 32 bytes for a mnemonic, the descriptor parser and its
+cosigner decision for a descriptor. NFC adds a medium, never a shortcut past
+one.
+
+`nfc_has_record()` is the exception and asks about *any* known type, because it
+feeds the overwrite warning: a seed about to be buried under a descriptor is
+something to lose whether or not the page doing the burying could read it.
 
 Offsets are linear. `picc.c` maps them onto MIFARE Classic blocks (skipping
 block 0 and every sector trailer) or Ultralight pages (starting at page 4), so
@@ -131,8 +170,58 @@ neither the record layer nor the pages know which kind of tag is present.
 The backup ID is not stored separately — it already lives inside the KEF
 envelope's header, and `storage_get_kef_display_name()` reads it from there.
 
-There is no checksum: the KEF envelope is authenticated, so a half-written or
-decaying card fails to decrypt.
+There is no checksum in the record format. For a sealed payload none is needed:
+the KEF envelope is authenticated, so a half-written or decaying card fails to
+decrypt. An unsealed descriptor has to bring its own — see below.
+
+### A descriptor card, sealed or not
+
+A type-2 record holds **either** a KEF envelope **or** a bare descriptor
+string, exactly as a descriptor on an SD card may be a `.kef` or a `.txt`.
+Which one it is needs no flag: `kef_is_envelope()` reads a version byte that is
+always below 32, at an offset where a descriptor always has a character of 0x20
+or above, so the two can never be confused. The fork is unambiguous by
+construction, not by luck.
+
+Choosing plaintext costs two things the envelope was doing for free.
+
+**Privacy.** A descriptor holds every xpub in the wallet, which is its whole
+history and all of its future addresses, and an unsealed card hands them to any
+reader brought near it. The equivalent `.txt` on an SD card is at least sitting
+in a drawer. Choose plaintext for a card the way you would choose it for a
+sheet of paper — which is why that path prompts and the sealed one does not.
+
+**Authentication.** Kern writes the plaintext form with its BIP-380 checksum
+and **refuses a card whose checksum does not match**. The check is Kern's, not
+libwally's: libwally parses a descriptor whether or not the checksum agrees,
+and `descriptor_to_unambiguous()` strips it before the validator ever sees it,
+so it is verified in `nfc_load_descriptor.c` or nowhere. That matters more than
+it sounds — only the xpubs carry integrity of their own, being base58check. A
+flipped bit in a fingerprint, a derivation path, a threshold or a script
+wrapper is accepted in silence and points the wallet at different addresses. A
+damaged card says `Card data is damaged`, which is a different message from
+`No descriptor on this card` on purpose: one means rewrite it, the other means
+it was never there.
+
+**Size** is the remaining limit, and here Kern differs from the Krux fork.
+`kef_encrypt_page.c` seals everything with `KEF_V20_GCM_E4`, which does not
+compress, so the envelope costs `1 + id_len + 1 + 3 + 12 + 4` bytes on top of
+the string — 29 with the default 8-character ID, which is the descriptor's own
+checksum. Against a 704-byte payload ceiling:
+
+| Form | On-card bytes | Largest descriptor body |
+|------|---------------|-------------------------|
+| Plaintext + `#cksum` | body + 9 | **695** |
+| Sealed (KEF v20) | body + 38 | **666** |
+
+So on Kern **sealing costs 29 bytes rather than saving them** — the reverse of
+Krux, which deflates before it encrypts and fits a large descriptor sealed that
+will not fit in the clear. A 2-of-3 `wsh(sortedmulti(...))` runs about 450
+bytes and fits either way; a taproot miniscript may fit neither. Switching this
+path to `KEF_V21_GCM_Z_E4` would compress and stays readable by both firmwares,
+but that version is chosen in a page shared with the seed backup, so it is left
+for a change that can consider both. A card that cannot hold the descriptor
+says so before the antenna comes up.
 
 ### A phone will show the card as empty
 
@@ -173,7 +262,16 @@ stops at the first divergence: magic, then type, then reserved bytes (which must
 be zero, denying the field as a covert channel), then length against both the
 compile-time ceiling and the tag's real capacity. The allocation uses the
 validated value, never the raw field, so a hostile card cannot drive a large
-allocation.
+allocation. The type check intersects the caller's mask with the types this
+build knows, so a caller cannot widen the allowlist past the format — even by
+asking for all of them.
+
+**Descriptor payloads** (`nfc_load_descriptor.c`) — a payload is refused unless
+every byte is printable ASCII. `descriptor_loader_process_string()` takes a
+`const char *`, so an embedded NUL in a payload a stranger chose would truncate
+the descriptor to a shorter one that still parses — a different wallet, loaded
+without a word. An unsealed payload then has to prove its BIP-380 checksum
+before the parser sees it.
 
 **After decryption** (`nfc_load_mnemonic.c`) — decrypting does not make the
 bytes ours. KEF versions with a 16-bit hidden auth let a wrong password through
@@ -192,10 +290,18 @@ defence applies: the fingerprint confirmation screen before the key is used.
 The filtering above is about the path to that screen being free of memory
 corruption, not about deciding whose seed it is.
 
-The header parser is pure and has no I/O, so it runs on the host:
+The header parser is pure and has no I/O, so it runs on the host — including
+the golden vectors that pin the record header byte for byte against Krux:
 
 ```bash
 make -C components/nfc/test run
+```
+
+The descriptor checksum gate has its own vectors, computed from the BIP-380
+spec rather than from the code under test:
+
+```bash
+make -C main/core/test run
 ```
 
 ---
@@ -215,17 +321,37 @@ main/pages/nfc/
   nfc_tap_page.c         "hold a card" prompt, RF field lifecycle
   nfc_store_mnemonic.c   KEF encrypt, then write
   nfc_load_mnemonic.c    read, decrypt, confirm
+  nfc_store_descriptor.c seal or checksum, then write
+  nfc_load_descriptor.c  read, unseal or verify, validate
 
 main/pages/login/nfc_settings.c   toggle and reader probe
 ```
 
-Hooks into existing code are five short blocks, all under `#if CONFIG_KERN_NFC`:
-the two menu entries, the settings entry, the session-lock teardown, and `nfc`
-in `main/CMakeLists.txt`. `main/core/storage.c` is untouched — a card holds one
-record, so there is no file list to browse and no third `storage_location_t`.
+Hooks into existing code are short blocks, all under `#if CONFIG_KERN_NFC` and
+all hidden at runtime when the setting is off: the four menu entries (store and
+load, for a seed and for a descriptor), the settings entry, the session-lock
+teardown, and `nfc` in `main/CMakeLists.txt`. `main/core/storage.c` is
+untouched — a card holds one record, so there is no file list to browse and no
+third `storage_location_t`, and keeping that type out of the NFC page
+signatures is what keeps it that way.
+
+`descriptor_loader_show_source_menu()` gained an `nfc_cb` parameter rather than
+a `#if`: a shared function whose *shape* depends on a config is the one thing
+worth avoiding here, so the signature is the same in every build and a caller
+that has nothing to offer passes NULL.
 
 The simulator does not define `CONFIG_KERN_NFC` and lists its sources
 explicitly, so it builds exactly as before.
+
+### Where NFC is deliberately not offered
+
+The "load a descriptor" offer on the PSBT review screen lists QR, Flash and SD
+but not NFC. That path holds the PSBT under review in RAM for the whole detour,
+and a card read plus a KEF decrypt is a 704-byte allocation followed by PBKDF2
+with its own working buffers — the one place in the firmware where running
+short loses a transaction rather than a menu. Energizing the antenna in the
+middle of a signing review is also a posture change that wants its own
+argument. Load a card-held descriptor from the Descriptor Manager first.
 
 ---
 

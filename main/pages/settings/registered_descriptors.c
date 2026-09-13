@@ -5,6 +5,7 @@
 #include "../../core/key.h"
 #include "../../core/miniscript_policy.h"
 #include "../../core/registry.h"
+#include "../../core/settings.h"
 #include "../../ui/dialog.h"
 #include "../../ui/input_helpers.h"
 #include "../../ui/menu.h"
@@ -159,6 +160,12 @@ static void save_sd_cb(void) {
   emit_action(REGISTERED_DESCRIPTOR_ACTION_SAVE_SD);
 }
 
+#if CONFIG_KERN_NFC
+static void save_nfc_cb(void) {
+  emit_action(REGISTERED_DESCRIPTOR_ACTION_SAVE_NFC);
+}
+#endif
+
 static void remove_confirmed_cb(bool confirmed, void *user_data) {
   (void)user_data;
   if (!confirmed || pending_remove_index < 0)
@@ -213,6 +220,13 @@ static void show_action_menu(void) {
   ui_menu_add_entry(action_menu, "Export QR Code", export_qr_cb);
   ui_menu_add_entry(action_menu, "Save to Flash", save_flash_cb);
   ui_menu_add_entry(action_menu, "Save to SD Card", save_sd_cb);
+#if CONFIG_KERN_NFC
+  /* Hidden rather than disabled when the setting is off, following the rest of
+     the NFC entries. Safe to insert mid-list: this menu dispatches by callback,
+     never by index. */
+  if (settings_get_nfc_enabled())
+    ui_menu_add_entry(action_menu, "Save to NFC Card", save_nfc_cb);
+#endif
   ui_menu_add_entry(action_menu, "Remove from Session", remove_action_cb);
   ui_menu_show(action_menu);
 }
