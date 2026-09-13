@@ -15,6 +15,17 @@ static const char *TAG = "NFC";
 _Static_assert(NFC_MAX_PAYLOAD == NFC_RECORD_MAX_PAYLOAD,
                "public and record-layer payload ceilings must agree");
 
+/* The public header repeats the record-layer type numbers so main/ never has
+   to reach into src/. These tie the two copies together at compile time. */
+_Static_assert(NFC_RECORD_TYPE_KEF == NFC_RECORD_KEF, "type KEF must agree");
+_Static_assert(NFC_RECORD_TYPE_DESCRIPTOR == NFC_RECORD_DESCRIPTOR,
+               "type DESCRIPTOR must agree");
+_Static_assert(NFC_RECORD_TYPE_DATUM == NFC_RECORD_DATUM,
+               "type DATUM must agree");
+_Static_assert(NFC_RECORD_TYPE_XPUB == NFC_RECORD_XPUB, "type XPUB must agree");
+_Static_assert(NFC_ACCEPT_ANY_KNOWN == NFC_RECORD_MASK_ANY_KNOWN,
+               "public and record-layer type allowlists must agree");
+
 /* Local wipe rather than main/utils/secure_mem.h: components do not depend on
  * main/. Same technique — a volatile function pointer the compiler cannot
  * optimize into a dead store. */
@@ -65,7 +76,8 @@ esp_err_t nfc_poll(nfc_tag_t *out) { return picc_select(out); }
 /* ---------- Records ---------- */
 
 /* Read and validate the header. Nothing downstream runs until this passes. */
-static esp_err_t read_header(const nfc_tag_t *tag, nfc_record_t *rec) {
+static esp_err_t read_header(const nfc_tag_t *tag, uint32_t accept_mask,
+                             nfc_record_t *rec) {
   uint8_t header[NFC_HEADER_LEN];
   esp_err_t ret = picc_read(tag, 0, header, sizeof(header));
   if (ret != ESP_OK) {
@@ -76,7 +88,8 @@ static esp_err_t read_header(const nfc_tag_t *tag, nfc_record_t *rec) {
     return ret;
   }
 
-  nfc_record_err_t err = nfc_record_parse(header, tag->capacity, rec);
+  nfc_record_err_t err =
+      nfc_record_parse(header, tag->capacity, accept_mask, rec);
   if (err != NFC_RECORD_OK) {
     ESP_LOGW(TAG, "Header rejected: %s", nfc_record_err_str(err));
     return record_err_to_esp(err);
@@ -88,11 +101,14 @@ bool nfc_has_record(const nfc_tag_t *tag) {
   if (!tag)
     return false;
   nfc_record_t rec;
-  return read_header(tag, &rec) == ESP_OK;
+  /* Any known type, deliberately. This feeds the overwrite warning, and a
+     seed about to be buried under a descriptor is something to lose whether
+     or not the caller doing the burying could have read it. */
+  return read_header(tag, NFC_ACCEPT_ANY_KNOWN, &rec) == ESP_OK;
 }
 
-esp_err_t nfc_read_record(const nfc_tag_t *tag, uint8_t **data_out,
-                          size_t *len_out) {
+esp_err_t nfc_read_record(const nfc_tag_t *tag, uint32_t accept_mask,
+                          uint8_t **data_out, size_t *len_out) {
   if (!tag || !data_out || !len_out)
     return ESP_ERR_INVALID_ARG;
 
@@ -100,7 +116,7 @@ esp_err_t nfc_read_record(const nfc_tag_t *tag, uint8_t **data_out,
   *len_out = 0;
 
   nfc_record_t rec;
-  esp_err_t ret = read_header(tag, &rec);
+  esp_err_t ret = read_header(tag, accept_mask, &rec);
   if (ret != ESP_OK)
     return ret;
 
@@ -124,15 +140,15 @@ esp_err_t nfc_read_record(const nfc_tag_t *tag, uint8_t **data_out,
   return ESP_OK;
 }
 
-esp_err_t nfc_write_record(const nfc_tag_t *tag, const uint8_t *data,
-                           size_t len) {
+esp_err_t nfc_write_record(const nfc_tag_t *tag, uint8_t type,
+                           const uint8_t *data, size_t len) {
   if (!tag || !data || len == 0)
     return ESP_ERR_INVALID_ARG;
   if (len > NFC_MAX_PAYLOAD)
     return ESP_ERR_INVALID_SIZE;
 
   uint8_t header[NFC_HEADER_LEN];
-  nfc_record_err_t err = nfc_record_build(header, len, tag->capacity);
+  nfc_record_err_t err = nfc_record_build(header, len, tag->capacity, type);
   if (err != NFC_RECORD_OK)
     return record_err_to_esp(err);
 

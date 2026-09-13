@@ -57,8 +57,8 @@ static void do_write(void) {
     return;
   }
 
-  esp_err_t ret =
-      nfc_write_record(&tag, pending_envelope, pending_envelope_len);
+  esp_err_t ret = nfc_write_record(&tag, NFC_RECORD_TYPE_KEF, pending_envelope,
+                                   pending_envelope_len);
   teardown();
 
   if (ret == ESP_OK) {
@@ -83,9 +83,9 @@ static void overwrite_confirm_cb(bool confirmed, void *user_data) {
 
 static void on_tag(const nfc_tag_t *tag) {
   if (nfc_has_record(tag)) {
-    dialog_show_danger_confirm("This card already holds a backup. Overwrite?",
-                               overwrite_confirm_cb, NULL,
-                               DIALOG_STYLE_OVERLAY);
+    dialog_show_danger_confirm(
+        "This card already holds a Kern record. Overwrite?",
+        overwrite_confirm_cb, NULL, DIALOG_STYLE_OVERLAY);
     return;
   }
   do_write();

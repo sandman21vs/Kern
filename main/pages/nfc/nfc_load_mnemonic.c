@@ -73,7 +73,8 @@ static void on_tag(const nfc_tag_t *tag) {
   uint8_t *envelope = NULL;
   size_t envelope_len = 0;
 
-  esp_err_t ret = nfc_read_record(tag, &envelope, &envelope_len);
+  esp_err_t ret = nfc_read_record(tag, NFC_ACCEPT(NFC_RECORD_TYPE_KEF),
+                                  &envelope, &envelope_len);
   nfc_tap_page_destroy();
 
   if (ret != ESP_OK) {
