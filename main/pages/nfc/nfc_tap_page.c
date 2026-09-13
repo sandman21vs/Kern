@@ -80,21 +80,41 @@ void nfc_tap_page_create(lv_obj_t *parent, const char *title, const char *hint,
   tap_screen = theme_create_page_container(parent);
   theme_create_page_title(tap_screen, title);
 
-  lv_obj_t *spinner = lv_spinner_create(tap_screen);
+  /* Spinner and text stacked in one centred column. They used to be placed by
+     offsets from the middle of the screen, but the spinner is sized from
+     min_touch while the offsets came from button_spacing — two tokens that do
+     not grow together — so on every board the prompt landed inside the ring.
+     A column stacks each widget by its real height, and the labels wrap within
+     the screen instead of running off a narrow one. */
+  lv_obj_t *column = theme_create_flex_column(tap_screen);
+  lv_obj_set_width(column, LV_PCT(100));
+  lv_obj_set_style_pad_row(column, theme_button_spacing(), 0);
+  lv_obj_center(column);
+
+  lv_obj_t *spinner = lv_spinner_create(column);
   lv_spinner_set_anim_params(spinner, 1000, 60);
   lv_obj_set_size(spinner, theme_min_touch_size() * 2,
                   theme_min_touch_size() * 2);
-  lv_obj_align(spinner, LV_ALIGN_CENTER, 0, -theme_button_spacing());
   lv_obj_set_style_arc_color(spinner, highlight_color(), LV_PART_INDICATOR);
   lv_obj_set_style_arc_color(spinner, disabled_color(), LV_PART_MAIN);
 
+  /* The prompt and its hint read as one block, so they sit closer together
+     than the block sits to the spinner. */
+  lv_obj_t *text = theme_create_flex_column(column);
+  lv_obj_set_width(text, LV_PCT(100));
+  lv_obj_set_style_pad_row(text, theme_small_padding(), 0);
+
   lv_obj_t *prompt =
-      theme_create_label(tap_screen, "Hold a card to the reader", false);
-  lv_obj_align(prompt, LV_ALIGN_CENTER, 0, theme_button_spacing() * 2);
+      theme_create_label(text, "Hold a card to the reader", false);
+  lv_obj_set_width(prompt, LV_PCT(90));
+  lv_label_set_long_mode(prompt, LV_LABEL_LONG_WRAP);
+  lv_obj_set_style_text_align(prompt, LV_TEXT_ALIGN_CENTER, 0);
 
   if (hint) {
-    lv_obj_t *hint_label = theme_create_label(tap_screen, hint, true);
-    lv_obj_align(hint_label, LV_ALIGN_CENTER, 0, theme_button_spacing() * 4);
+    lv_obj_t *hint_label = theme_create_label(text, hint, true);
+    lv_obj_set_width(hint_label, LV_PCT(90));
+    lv_label_set_long_mode(hint_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_align(hint_label, LV_TEXT_ALIGN_CENTER, 0);
   }
 
   back_button = ui_create_back_button(parent, cancel_cb);
