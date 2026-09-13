@@ -74,6 +74,29 @@ static bool desc_compute_checksum(const char *str, size_t len, char out[9]) {
   return true;
 }
 
+bool descriptor_checksum_verify_text(const char *text) {
+  if (!text)
+    return false;
+
+  /* The first '#', matching how every other implementation splits: a second
+     one lands inside the eight-character tail and fails the length test
+     below rather than being silently treated as the real separator. */
+  const char *hash = strchr(text, '#');
+  if (!hash || hash == text)
+    return false;
+
+  size_t body_len = (size_t)(hash - text);
+  if (strlen(hash + 1) != 8)
+    return false;
+
+  char expected[9];
+  if (!desc_compute_checksum(text, body_len, expected))
+    return false;
+
+  /* Public data; no reason to hide the comparison's timing. */
+  return memcmp(expected, hash + 1, 8) == 0;
+}
+
 bool descriptor_text_has_uppercase_hardened(const char *s) {
   if (!s)
     return false;
