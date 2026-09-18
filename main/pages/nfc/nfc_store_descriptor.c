@@ -5,6 +5,7 @@
 #include "../../ui/dialog.h"
 #include "../../ui/theme_widgets.h"
 #include "../../utils/secure_mem.h"
+#include "../../utils/session_cleanup.h"
 #include "../shared/kef_encrypt_page.h"
 #include "nfc_tap_page.h"
 
@@ -191,6 +192,7 @@ static void plaintext_confirm_cb(bool confirmed, void *user_data) {
 void nfc_store_descriptor_page_create(
     lv_obj_t *parent, void (*return_cb)(void), bool encrypted,
     const struct wally_descriptor *descriptor) {
+  session_cleanup_register(nfc_store_descriptor_page_destroy);
   if (!parent || !descriptor)
     return;
 
@@ -256,6 +258,7 @@ void nfc_store_descriptor_page_hide(void) {
 }
 
 void nfc_store_descriptor_page_destroy(void) {
+  session_cleanup_unregister(nfc_store_descriptor_page_destroy);
   teardown();
 
   if (descriptor_text) {

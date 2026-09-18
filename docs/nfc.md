@@ -34,8 +34,9 @@ toggle under **Settings → NFC** is switched on.
 this feature sits in tension with that rule and is deliberately narrow:
 
 - The RF field is energized only inside the tap page, and dropped when it
-  closes. `nfc_tap_page_destroy()` is also called from the session-lock path, so
-  a device that locks while a card page is open does not keep an antenna live.
+  closes. Every NFC page registers its destroy with `session_cleanup`, so a
+  device that locks while a card page is open drops the field and wipes the
+  page's buffers before the lock screen draws.
 - The reader is attached to the I2C bus lazily, in that same page. With the
   toggle off, `nfc_init()` never runs.
 - The seed never crosses the antenna in the clear. It is converted to compact
@@ -329,8 +330,9 @@ main/pages/login/nfc_settings.c   toggle and reader probe
 
 Hooks into existing code are short blocks, all under `#if CONFIG_KERN_NFC` and
 all hidden at runtime when the setting is off: the four menu entries (store and
-load, for a seed and for a descriptor), the settings entry, the session-lock
-teardown, and `nfc` in `main/CMakeLists.txt`. `main/core/storage.c` is
+load, for a seed and for a descriptor), the settings entry, and `nfc` in
+`main/CMakeLists.txt`. The session lock needs no hook: the pages register with
+`session_cleanup` like every other page. `main/core/storage.c` is
 untouched — a card holds one record, so there is no file list to browse and no
 third `storage_location_t`, and keeping that type out of the NFC page
 signatures is what keeps it that way.

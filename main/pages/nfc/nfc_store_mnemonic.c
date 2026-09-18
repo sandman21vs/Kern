@@ -6,6 +6,7 @@
 #include "../../ui/dialog.h"
 #include "../../ui/theme_widgets.h"
 #include "../../utils/secure_mem.h"
+#include "../../utils/session_cleanup.h"
 #include "../shared/kef_encrypt_page.h"
 #include "nfc_tap_page.h"
 
@@ -121,6 +122,7 @@ static void encrypt_success_cb(const char *id, const uint8_t *envelope,
 /* ---------- Page lifecycle ---------- */
 
 void nfc_store_mnemonic_page_create(lv_obj_t *parent, void (*return_cb)(void)) {
+  session_cleanup_register(nfc_store_mnemonic_page_destroy);
   if (!parent || !key_is_loaded())
     return;
 
@@ -166,6 +168,7 @@ void nfc_store_mnemonic_page_hide(void) {
 }
 
 void nfc_store_mnemonic_page_destroy(void) {
+  session_cleanup_unregister(nfc_store_mnemonic_page_destroy);
   teardown();
 
   SECURE_FREE_BUFFER(compact_seedqr_data, compact_seedqr_len);

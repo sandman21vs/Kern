@@ -5,6 +5,7 @@
 #include "../../core/kef.h"
 #include "../../ui/dialog.h"
 #include "../../utils/secure_mem.h"
+#include "../../utils/session_cleanup.h"
 #include "../shared/descriptor_loader.h"
 #include "../shared/kef_decrypt_page.h"
 #include "nfc_tap_page.h"
@@ -183,6 +184,7 @@ static void tap_cancel_cb(void) {
 
 void nfc_load_descriptor_page_create(lv_obj_t *parent, void (*return_cb)(void),
                                      void (*success_cb)(void)) {
+  session_cleanup_register(nfc_load_descriptor_page_destroy);
   if (!parent)
     return;
 
@@ -202,6 +204,7 @@ void nfc_load_descriptor_page_show(void) { nfc_tap_page_show(); }
 void nfc_load_descriptor_page_hide(void) { nfc_tap_page_hide(); }
 
 void nfc_load_descriptor_page_destroy(void) {
+  session_cleanup_unregister(nfc_load_descriptor_page_destroy);
   nfc_tap_page_destroy();
   kef_decrypt_page_destroy();
   drop_pending();

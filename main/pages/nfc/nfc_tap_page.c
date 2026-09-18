@@ -6,6 +6,7 @@
 #include "../../ui/input_helpers.h"
 #include "../../ui/theme.h"
 #include "../../ui/theme_widgets.h"
+#include "../../utils/session_cleanup.h"
 
 #include <bsp/esp-bsp.h>
 #include <lvgl.h>
@@ -49,6 +50,7 @@ static void cancel_cb(lv_event_t *e) {
 void nfc_tap_page_create(lv_obj_t *parent, const char *title, const char *hint,
                          void (*cancel_callback_fn)(void),
                          nfc_tap_cb_t on_tag) {
+  session_cleanup_register(nfc_tap_page_destroy);
   if (!parent)
     return;
 
@@ -142,6 +144,7 @@ void nfc_tap_page_hide(void) {
 }
 
 void nfc_tap_page_destroy(void) {
+  session_cleanup_unregister(nfc_tap_page_destroy);
   stop_polling();
 
   /* Field down and reader detached before the UI goes, so the antenna is

@@ -7,6 +7,7 @@
 #include "../../ui/settings_row.h"
 #include "../../ui/theme.h"
 #include "../../ui/theme_widgets.h"
+#include "../../utils/session_cleanup.h"
 
 #include <bsp/esp-bsp.h>
 #include <lvgl.h>
@@ -72,6 +73,7 @@ static void back_cb(lv_event_t *e) {
 }
 
 void nfc_settings_page_create(lv_obj_t *parent, void (*return_cb)(void)) {
+  session_cleanup_register(nfc_settings_page_destroy);
   if (!parent)
     return;
 
@@ -151,6 +153,7 @@ void nfc_settings_page_hide(void) {
 }
 
 void nfc_settings_page_destroy(void) {
+  session_cleanup_unregister(nfc_settings_page_destroy);
   if (back_button) {
     lv_obj_del(back_button);
     back_button = NULL;
