@@ -3,22 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kern Web Flasher</title>
-  <meta name="description" content="Flash Kern research builds to your ESP32-P4 device directly from the browser.">
+  <title>Kern NFC Fork Flasher (experimental)</title>
+  <meta name="description" content="Unofficial, experimental Kern fork testing NFC card storage. Do not use with real funds.">
 
   <meta property="og:type"        content="website">
-  <meta property="og:url"         content="https://odudex.github.io/Kern/flash/">
-  <meta property="og:title"       content="Kern Web Flasher">
-  <meta property="og:description" content="Flash Kern research builds to your ESP32-P4 device directly from the browser.">
-  <meta property="og:image"       content="https://odudex.github.io/Kern/branding/og_preview.png">
+  <meta property="og:url"         content="https://sandman21vs.github.io/Kern/flash/">
+  <meta property="og:title"       content="Kern NFC Fork Flasher (experimental, unofficial)">
+  <meta property="og:description" content="Unofficial, experimental Kern fork testing NFC card storage. Do not use with real funds.">
+  <meta property="og:image"       content="https://sandman21vs.github.io/Kern/branding/og_preview.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt"   content="Kern logo on dark background">
 
   <meta name="twitter:card"        content="summary_large_image">
-  <meta name="twitter:title"       content="Kern Web Flasher">
-  <meta name="twitter:description" content="Flash Kern research builds to your ESP32-P4 device directly from the browser.">
-  <meta name="twitter:image"       content="https://odudex.github.io/Kern/branding/og_preview.png">
+  <meta name="twitter:title"       content="Kern NFC Fork Flasher (experimental, unofficial)">
+  <meta name="twitter:description" content="Unofficial, experimental Kern fork testing NFC card storage. Do not use with real funds.">
+  <meta name="twitter:image"       content="https://sandman21vs.github.io/Kern/branding/og_preview.png">
   <meta name="twitter:image:alt"   content="Kern logo on dark background">
   <style>
     :root {
@@ -66,7 +66,30 @@
       border-radius: 6px; padding: 0.75rem 1rem;
       font-size: 0.85rem; margin-bottom: 1rem;
     }
-    .banner-warn  { background: rgba(210,153,34,0.1);  border: 1px solid var(--warn);  color: var(--warn); }
+    .fork-alert {
+      border: 2px solid var(--error); border-radius: 8px;
+      background: repeating-linear-gradient(-45deg,
+        rgba(248,81,73,0.14) 0 12px, rgba(248,81,73,0.06) 12px 24px);
+      padding: 0.5rem; margin-bottom: 1rem;
+    }
+    .fork-alert .inner { background: var(--bg); border-radius: 5px; padding: 1.25rem 1.4rem; }
+    .fork-alert h2 {
+      color: var(--error); font-size: clamp(1.15rem, 3.4vw, 1.5rem); font-weight: 800;
+      line-height: 1.2; text-transform: uppercase; margin-bottom: 0.7rem;
+    }
+    .fork-alert p  { font-size: 0.95rem; margin-bottom: 0.6rem; }
+    .fork-alert ul { padding-left: 1.2rem; font-size: 0.9rem; margin-bottom: 0.8rem; }
+    .fork-alert li { margin-bottom: 0.3rem; }
+    .fork-alert strong { color: var(--error); }
+    .fork-alert a { color: var(--accent); }
+    .fork-alert .official { color: var(--muted); font-size: 0.85rem; margin: 0; }
+
+    .ack {
+      display: flex; gap: 0.6rem; align-items: flex-start;
+      font-size: 0.875rem; color: var(--text); margin-bottom: 1rem; cursor: pointer;
+    }
+    .ack input { margin-top: 0.2rem; accent-color: var(--error); width: 1rem; height: 1rem; flex: none; }
+
     .banner-error { background: rgba(248,81,73,0.1);   border: 1px solid var(--error); color: var(--error); display: none; }
 
     .tabs { display: flex; gap: 0.5rem; margin-bottom: 1.25rem; }
@@ -147,8 +170,8 @@
   <header>
     <a href="../"><img src="../branding/kern_logo_with_text_white.png"
          alt="Kern logo" onerror="this.style.display='none'"></a>
-    <h1>Web Flasher</h1>
-    <p>Flash Kern firmware to your ESP32-P4 device directly from the browser</p>
+    <h1>NFC Fork Flasher</h1>
+    <p>Experimental builds of the NFC card storage branch, flashed from the browser</p>
   </header>
 
   <div class="banner banner-error" id="compatBanner">
@@ -156,10 +179,28 @@
     Please use <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> version 89 or later.
   </div>
 
-  <div class="banner banner-warn">
-    ⚠ <strong>Warning:</strong> CI builds are unvetted development snapshots from a research project.
-    Secure boot is not enabled. Flash them for experimentation and testnet use; any mainnet use is
-    entirely at your own risk.
+  <div class="fork-alert" role="alert">
+    <div class="inner">
+      <h2>⚠ Experimental fork, not official Kern</h2>
+      <p>
+        This flasher writes firmware from
+        <a href="https://github.com/sandman21vs/Kern/tree/nfc-card-storage" target="_blank" rel="noopener">sandman21vs/Kern</a>,
+        an unofficial fork running a <strong>proof-of-concept test of NFC card storage</strong>.
+      </p>
+      <ul>
+        <li><strong>Do not use it with real seeds or real funds.</strong> Testnet and throwaway keys only.</li>
+        <li>Not reviewed or endorsed by the Kern maintainers, never audited, and tested on one board with one card type.</li>
+        <li>NFC is a radio: this build deliberately weakens Kern's air-gap. Secure boot is not enabled.</li>
+        <li>Builds are unvetted snapshots of an experimental branch. They may misbehave or lose what is stored on the device.</li>
+        <li>No warranty and no support. Report problems to this fork, not to upstream Kern.</li>
+      </ul>
+      <p class="official">
+        Want the real thing? Use the
+        <a href="https://odudex.github.io/Kern/flash/" target="_blank" rel="noopener">official Kern web flasher</a>.
+        Read the <a href="https://github.com/sandman21vs/Kern/blob/nfc-card-storage/docs/nfc.md" target="_blank" rel="noopener">NFC design notes</a>
+        before flashing.
+      </p>
+    </div>
   </div>
 
   <!-- Firmware source card -->
@@ -204,6 +245,11 @@
   <!-- Flash card -->
   <div class="card">
     <div class="card-title">Flash</div>
+    <label class="ack" for="ackBox">
+      <input type="checkbox" id="ackBox" onchange="updateFlashEnabled()">
+      <span>I understand this is an unofficial, experimental build that has not been
+        reviewed or audited, and I will not use it with real seeds or real funds.</span>
+    </label>
     <div class="actions">
       <button class="btn btn-connect" id="connectBtn" onclick="toggleConnect()">🔌 Connect</button>
       <button class="btn btn-flash"   id="flashBtn"   onclick="startFlash()" disabled>⚡ Flash</button>
@@ -217,7 +263,8 @@
 
   <footer>
     <a href="../">Home</a> ·
-    <a href="https://github.com/odudex/Kern" target="_blank">GitHub</a> ·
+    <a href="https://github.com/sandman21vs/Kern/tree/nfc-card-storage" target="_blank">Fork on GitHub</a> ·
+    <a href="https://github.com/odudex/Kern" target="_blank">Official Kern</a> ·
     <a href="https://t.me/kern_custody" target="_blank">Telegram</a> ·
     Powered by <a href="https://github.com/espressif/esptool-js" target="_blank">esptool-js</a>
   </footer>
@@ -267,6 +314,14 @@ let currentMode  = 'ci';
 let transport    = null;
 let esploader    = null;
 let customFiles  = null; // [{name, offset, data:Uint8Array}]
+
+// ── Flash gating ──────────────────────────────────────────────────────────────
+// Flashing needs a connected device and the experimental-build acknowledgement.
+function updateFlashEnabled() {
+  document.getElementById('flashBtn').disabled =
+    !esploader || !document.getElementById('ackBox').checked;
+}
+window.updateFlashEnabled = updateFlashEnabled;
 
 // ── Browser compatibility ─────────────────────────────────────────────────────
 if (!('serial' in navigator)) {
@@ -426,7 +481,7 @@ async function doConnect() {
 
     connectBtn.textContent = '⏏ Disconnect';
     connectBtn.classList.add('connected');
-    document.getElementById('flashBtn').disabled = false;
+    updateFlashEnabled();
   } catch (e) {
     log('Connection failed: ' + e.message, 'l-err');
     transport = null;
@@ -453,6 +508,10 @@ async function doDisconnect() {
 // ── Flash ───────────────────────────────────────────────────────────────────
 window.startFlash = async function () {
   if (!esploader) { log('Not connected.', 'l-err'); return; }
+  if (!document.getElementById('ackBox').checked) {
+    log('Tick the acknowledgement above before flashing.', 'l-err');
+    return;
+  }
 
   const connectBtn = document.getElementById('connectBtn');
   const flashBtn   = document.getElementById('flashBtn');
@@ -519,7 +578,7 @@ window.startFlash = async function () {
   }
 
   connectBtn.disabled = false;
-  flashBtn.disabled   = false;
+  updateFlashEnabled();
 };
 </script>
 </body>

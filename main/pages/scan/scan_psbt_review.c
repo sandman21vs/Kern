@@ -166,8 +166,15 @@ void scan_psbt_resume_review(bool offer_descriptor) {
 }
 
 static void psbt_offer_descriptor_cb(void) {
+  /* No NFC here, deliberately. This detour holds the PSBT under review in RAM
+     the whole time, and a card read plus a KEF decrypt is a 704-byte
+     allocation followed by PBKDF2 with its own working buffers — the one place
+     where running short loses a transaction rather than a menu. Energizing the
+     antenna in the middle of a signing review is also a posture change that
+     wants its own argument, not a ride on this one. Load the descriptor from
+     the Descriptor Manager first if it lives on a card. */
   descriptor_loader_show_source_menu(scan_ctx.screen, psbt_desc_qr_cb,
-                                     psbt_desc_flash_cb, psbt_desc_sd_cb,
+                                     psbt_desc_flash_cb, psbt_desc_sd_cb, NULL,
                                      psbt_desc_menu_back_cb);
 }
 

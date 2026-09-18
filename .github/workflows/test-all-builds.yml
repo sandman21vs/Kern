@@ -1,9 +1,12 @@
 name: Test All Builds
 on:
   push:
-    branches: [master]
+    branches: [master, nfc-card-storage]
   pull_request:
-    branches: [master]
+    branches: [master, nfc-card-storage]
+  # Manual redeploy of the fork's flasher. master (the default branch) mirrors
+  # upstream, so there is no UI button: gh workflow run test-all-builds.yml --ref nfc-card-storage
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -56,7 +59,9 @@ jobs:
   deploy-site:
     needs: [build]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    # This fork publishes the NFC experiment, not upstream master: a push to
+    # master (e.g. syncing upstream) must not overwrite the fork's flasher
+    if: github.ref == 'refs/heads/nfc-card-storage' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     permissions:
       contents: read
       pages: write

@@ -3,11 +3,26 @@
 </p>
 
 <p align="center">
-  <a href="https://odudex.github.io/Kern/"><b>Website</b></a> ·
-  <a href="https://odudex.github.io/Kern/flash/"><b>Web Flasher</b></a> ·
-  <a href="https://t.me/kern_custody"><b>Telegram</b></a> ·
-  <a href="ROADMAP.md"><b>Roadmap</b></a>
+  <a href="https://sandman21vs.github.io/Kern/"><b>Fork website</b></a> ·
+  <a href="https://sandman21vs.github.io/Kern/flash/"><b>Fork Web Flasher</b></a> ·
+  <a href="docs/nfc.md"><b>NFC notes</b></a> ·
+  <a href="https://github.com/odudex/Kern"><b>Official Kern</b></a>
 </p>
+
+> [!CAUTION]
+> # ⚠ Experimental fork, not official Kern
+>
+> **This is [sandman21vs/Kern](https://github.com/sandman21vs/Kern/tree/nfc-card-storage), an unofficial fork of [odudex/Kern](https://github.com/odudex/Kern) used as a proof-of-concept test of NFC card storage:** KEF-encrypted seed backups and wallet descriptors written to NFC cards through an external M5Stack RFID Unit 2. See [docs/nfc.md](docs/nfc.md).
+>
+> - **Do not use it with real seeds or real funds.** Testnet and throwaway keys only.
+> - **Not reviewed or endorsed by the Kern maintainers**, never audited, and tested on one board with one card type.
+> - **NFC is a radio.** This fork deliberately weakens Kern's air-gap to find out whether the idea works at all.
+> - **Builds from this fork, including the [fork web flasher](https://sandman21vs.github.io/Kern/flash/), are unvetted snapshots of an experimental branch.** They may misbehave, change without notice, or lose what is stored on the device.
+> - **No warranty, no support, no responsibility** for what anyone does with it. Report problems with this fork here, not upstream.
+>
+> For the real project, use the [official website](https://odudex.github.io/Kern/), the [official web flasher](https://odudex.github.io/Kern/flash/) and the [Telegram group](https://t.me/kern_custody).
+
+---
 
 Kern is a research and development project exploring what new hardware can do for Bitcoin self-custody. It takes the form of an air-gapped signing device on the ESP32-P4: the chip has no radio, so keys are generated and used on hardware that physically cannot reach a network. Transactions cross the air gap as QR codes or over an SD card.
 
@@ -40,7 +55,13 @@ only combination that gets autofocus.
 
 ## Prerequisites
 
-Kern targets [ESP-IDF v6.1](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32p4/get-started/index.html). Install it for the `esp32p4` target:
+Kern targets [ESP-IDF v6.1](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32p4/get-started/index.html). ESP-IDF needs a few system packages first (git, Python 3, CMake, Ninja). Install them with:
+
+- **macOS:** `brew install cmake ninja dfu-util python3`
+- **Debian/Ubuntu:** `sudo apt install git wget flex bison gperf python3 python3-pip python3-venv cmake ninja-build ccache libffi-dev libssl-dev dfu-util libusb-1.0-0`
+- **Windows:** use the [ESP-IDF Windows installer](https://docs.espressif.com/projects/esp-idf/en/v6.1/esp32p4/get-started/windows-setup.html), or build inside WSL2 with the Debian/Ubuntu steps.
+
+Then install ESP-IDF itself for the `esp32p4` target, at the path the `just` recipes expect (`~/esp/esp-idf`):
 
 ```bash
 git clone --depth 1 --recurse-submodules --shallow-submodules -b v6.1 https://github.com/espressif/esp-idf.git ~/esp/esp-idf
@@ -50,25 +71,61 @@ git clone --depth 1 --recurse-submodules --shallow-submodules -b v6.1 https://gi
 
 ## Build
 
-### Cloning the Repository
+### Quick start (this fork)
 
-This project uses git submodules. You have two options:
-
-#### Option 1: Clone with submodules (Recommended)
-
-When cloning the project for the first time, make sure to clone it recursively to include all submodules:
+The NFC experiment lives only on the **`nfc-card-storage`** branch. The fork's `master` is the default branch and is kept identical to upstream Kern, so a plain clone (without `-b nfc-card-storage`) builds firmware **without** NFC. You need ESP-IDF (see [Prerequisites](#prerequisites)) and [just](#installing-just). Then plug in the board over USB and run:
 
 ```bash
-git clone --recursive https://github.com/odudex/Kern.git
+git clone --recursive -b nfc-card-storage https://github.com/sandman21vs/Kern.git
+cd Kern
+. ~/esp/esp-idf/export.sh
+just build wave_35
+just flash wave_35
 ```
 
-#### Option 2: Initialize submodules after cloning
+Replace `wave_35` with your board's target from the [Hardware](#hardware) table. `just` loads ESP-IDF from `~/esp/esp-idf` by itself. If you call `idf.py` directly, run `. ~/esp/esp-idf/export.sh` first in every new terminal.
 
-If you've already cloned the repository without the `--recursive` flag, you can initialize and update the submodules with:
+After flashing, NFC is still **off**. Wire the reader as described in [docs/nfc.md](docs/nfc.md#wiring), then switch it on under **Settings → NFC**.
+
+To pull later changes to the experiment:
 
 ```bash
+git pull
 git submodule update --init --recursive
 ```
+
+### Cloning the Repository
+
+This project uses git submodules, and the NFC code is on the `nfc-card-storage` branch. You have two options:
+
+#### Option 1: Clone the NFC branch with submodules (Recommended)
+
+```bash
+git clone --recursive -b nfc-card-storage https://github.com/sandman21vs/Kern.git
+```
+
+#### Option 2: Fix up an existing clone
+
+If you already cloned without `--recursive` or without `-b nfc-card-storage`, switch to the branch and fetch the submodules:
+
+```bash
+git checkout nfc-card-storage
+git submodule update --init --recursive
+```
+
+Run `git branch --show-current` to check which branch you are on. It should print `nfc-card-storage`.
+
+> **Note:** The submodules (`libwally-core`, `cUR`, `k_quirc`) come from the upstream author's repositories and are the same as in official Kern. Only this repository is forked.
+
+### Installing just
+
+The `just` commands below need [just](https://github.com/casey/just). Install it once:
+
+```bash
+brew install just
+```
+
+On Debian/Ubuntu 24.04+ run `sudo apt install just`. On other systems, see [just's install guide](https://github.com/casey/just#installation). If you'd rather not install it, the `idf.py` commands below do the same thing.
 
 ### Building the Project
 
@@ -158,19 +215,21 @@ CONFIG_CAMERA_OV5647_ENABLE_MOTOR_BY_GPIO0=y
 
 The easiest way to flash Kern is the browser-based flasher, which requires no local toolchain. It works in **Google Chrome** or **Microsoft Edge** (version 89+) via the Web Serial API.
 
-**Live flasher:** https://odudex.github.io/Kern/flash/
+**This fork's flasher (NFC experiment):** https://sandman21vs.github.io/Kern/flash/
+
+**Official Kern flasher (no NFC):** https://odudex.github.io/Kern/flash/
 
 The flasher offers two modes:
-- **Latest CI Build**: fetches firmware built by the most recent `master` push directly from the site and flashes it to the selected board.
+- **Latest CI Build**: fetches firmware built by the most recent push to `nfc-card-storage` directly from the site and flashes it to the selected board.
 - **Custom ZIP Bundle**: accepts a `firmware-<board>.zip` artifact downloaded from the [Actions tab](../../actions) to flash any PR or older build.
 
 > **Warning:** CI builds are unvetted development snapshots from a research project. Secure boot is not enabled. Flash them for experimentation and testnet use; any mainnet use is entirely at your own risk.
 
-> **Note:** The project site and flasher are deployed automatically on every successful push to `master`, from `site/` in this repository. To enable it for your fork, go to **Settings → Pages** and set the source to **GitHub Actions**. To preview the site locally, run `just site` and open http://localhost:8000. Web Serial works on localhost, so you can flash a real board from the local copy.
+> **Note:** In this fork, the site and flasher are deployed automatically on every successful push to `nfc-card-storage`, from `site/` in this repository. Because `master` is the default branch and mirrors upstream, the Actions tab has no *Run workflow* button for this; redeploy by hand with `gh workflow run test-all-builds.yml --ref nfc-card-storage`. The `github-pages` environment only accepts deploys from `nfc-card-storage`, so syncing `master` with upstream never replaces the fork's flasher. To enable it for your fork, go to **Settings → Pages** and set the source to **GitHub Actions**. To preview the site locally, run `just site` and open http://localhost:8000. Web Serial works on localhost, so you can flash a real board from the local copy.
 
 ## Flashing CI Build Artifacts
 
-Every pull request and push to `master` produces a firmware artifact for each supported board via the **Test All Builds** workflow. These builds are useful for testing unreleased changes without setting up a local toolchain.
+Every pull request and push to `nfc-card-storage` or `master` produces a firmware artifact for each supported board via the **Test All Builds** workflow. These builds are useful for testing unreleased changes without setting up a local toolchain.
 
 ### Requirements
 
@@ -220,6 +279,8 @@ Every pull request and push to `master` produces a firmware artifact for each su
 ## Flashing Pre-releases
 
 Pre-release firmware is provided **for research and testing purposes only**. Any mainnet use is entirely at your own risk.
+
+> **Note:** This fork does not publish releases. The steps below flash **official Kern** releases, which do not include the NFC experiment. To run the NFC build, use the [fork web flasher](https://sandman21vs.github.io/Kern/flash/) or [build it yourself](#quick-start-this-fork).
 
 ### Supported Devices
 
@@ -275,9 +336,9 @@ A device already running signed firmware updates without any computer: copy `fir
 
 ## Community
 
-Development chat, testing reports and questions happen in the Telegram group: [t.me/kern_custody](https://t.me/kern_custody).
+Report problems with the NFC experiment, or anything else specific to this fork, on [this fork's issues](https://github.com/sandman21vs/Kern/issues). Please do not file them upstream.
 
-Bug reports and pull requests are welcome on [GitHub](https://github.com/odudex/Kern/issues).
+Kern itself is discussed in the official Telegram group, [t.me/kern_custody](https://t.me/kern_custody), and on [odudex/Kern](https://github.com/odudex/Kern/issues).
 
 ## References
 
