@@ -3,22 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kern: a research platform for air-gapped Bitcoin signing</title>
-  <meta name="description" content="Kern is an open-source research and development project exploring new hardware for Bitcoin self-custody: an air-gapped ESP32-P4 signing device that moves PSBTs over QR codes.">
+  <title>Kern NFC fork (experimental): a research platform for air-gapped Bitcoin signing</title>
+  <meta name="description" content="Experimental, unofficial fork of Kern testing NFC card storage. Kern is an open-source research and development project exploring new hardware for Bitcoin self-custody: an air-gapped ESP32-P4 signing device that moves PSBTs over QR codes.">
 
   <meta property="og:type"        content="website">
-  <meta property="og:url"         content="https://odudex.github.io/Kern/">
-  <meta property="og:title"       content="Kern: a research platform for air-gapped Bitcoin signing">
-  <meta property="og:description" content="An open-source research project exploring new hardware for Bitcoin self-custody, on air-gapped ESP32-P4 boards.">
-  <meta property="og:image"       content="https://odudex.github.io/Kern/branding/og_preview.png">
+  <meta property="og:url"         content="https://sandman21vs.github.io/Kern/">
+  <meta property="og:title"       content="Kern NFC fork (experimental, unofficial)">
+  <meta property="og:description" content="Unofficial fork testing NFC card storage. Do not use with real funds. An open-source research project exploring new hardware for Bitcoin self-custody, on air-gapped ESP32-P4 boards.">
+  <meta property="og:image"       content="https://sandman21vs.github.io/Kern/branding/og_preview.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt"   content="Kern logo on dark background">
 
   <meta name="twitter:card"        content="summary_large_image">
-  <meta name="twitter:title"       content="Kern: a research platform for air-gapped Bitcoin signing">
-  <meta name="twitter:description" content="An open-source research project exploring new hardware for Bitcoin self-custody, on air-gapped ESP32-P4 boards.">
-  <meta name="twitter:image"       content="https://odudex.github.io/Kern/branding/og_preview.png">
+  <meta name="twitter:title"       content="Kern NFC fork (experimental, unofficial)">
+  <meta name="twitter:description" content="Unofficial fork testing NFC card storage. Do not use with real funds. An open-source research project exploring new hardware for Bitcoin self-custody, on air-gapped ESP32-P4 boards.">
+  <meta name="twitter:image"       content="https://sandman21vs.github.io/Kern/branding/og_preview.png">
   <meta name="twitter:image:alt"   content="Kern logo on dark background">
 
   <link rel="icon" href="./branding/kern_logo_64.png" type="image/png">
@@ -114,6 +114,30 @@
       border: 1px solid var(--warn); color: var(--warn);
     }
 
+    /* ── Fork disclaimer ───────────────────────────────────────────────── */
+    :root { --danger: #f85149; }
+    .fork-alert {
+      border-bottom: 3px solid var(--danger);
+      background: repeating-linear-gradient(-45deg,
+        rgba(248,81,73,0.16) 0 14px, rgba(248,81,73,0.08) 14px 28px);
+      padding: 2rem 0;
+    }
+    .fork-alert .box {
+      max-width: 760px; margin: 0 auto;
+      background: var(--bg); border: 2px solid var(--danger); border-radius: 10px;
+      padding: 1.5rem 1.6rem;
+    }
+    .fork-alert h2 {
+      color: var(--danger); font-size: clamp(1.3rem, 3.6vw, 1.9rem);
+      line-height: 1.2; font-weight: 800; letter-spacing: -0.01em;
+      text-transform: uppercase; margin-bottom: 0.75rem;
+    }
+    .fork-alert p { font-size: 1rem; margin-bottom: 0.75rem; }
+    .fork-alert ul { padding-left: 1.2rem; margin-bottom: 0.9rem; }
+    .fork-alert li { margin-bottom: 0.35rem; }
+    .fork-alert strong { color: var(--danger); }
+    .fork-alert .official { font-size: 0.9rem; color: var(--muted); margin: 0; }
+
     /* ── Sections ──────────────────────────────────────────────────────── */
     section { padding: 3rem 0; border-top: 1px solid var(--border); }
     section h2 {
@@ -198,10 +222,39 @@
       <a href="#start" class="hide-sm">Get started</a>
       <a href="./flash/">Flasher</a>
       <a href="https://t.me/kern_custody" target="_blank" rel="noopener">Telegram</a>
-      <a href="https://github.com/odudex/Kern" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/sandman21vs/Kern/tree/nfc-card-storage" target="_blank" rel="noopener">GitHub</a>
     </div>
   </div>
 </nav>
+
+<div class="fork-alert" role="alert">
+  <div class="wrap">
+    <div class="box">
+      <h2>⚠ Experimental fork, not official Kern</h2>
+      <p>
+        This site and its web flasher belong to
+        <a href="https://github.com/sandman21vs/Kern/tree/nfc-card-storage" target="_blank" rel="noopener">sandman21vs/Kern</a>,
+        an unofficial fork used as a <strong>proof-of-concept test of NFC card storage</strong>:
+        encrypted seed backups and wallet descriptors written to NFC cards
+        through an external reader.
+      </p>
+      <ul>
+        <li><strong>Do not use it with real seeds or real funds.</strong> Testnet and throwaway keys only.</li>
+        <li>Not reviewed or endorsed by the Kern maintainers, never audited, and tested on one board with one card type.</li>
+        <li>NFC is a radio. This fork deliberately weakens Kern's air-gap to find out whether the idea works at all.</li>
+        <li>The firmware here is an unvetted build of an experimental branch. It may misbehave, change without notice, or lose what is stored on the device.</li>
+        <li>No warranty, no support, no responsibility for what anyone does with it. Report problems to this fork, not to upstream Kern.</li>
+      </ul>
+      <p class="official">
+        Looking for the real project? Official Kern lives at
+        <a href="https://odudex.github.io/Kern/" target="_blank" rel="noopener">odudex.github.io/Kern</a>
+        (<a href="https://github.com/odudex/Kern" target="_blank" rel="noopener">odudex/Kern</a>).
+        Read the <a href="https://github.com/sandman21vs/Kern/blob/nfc-card-storage/docs/nfc.md" target="_blank" rel="noopener">NFC design notes</a>
+        before flashing anything.
+      </p>
+    </div>
+  </div>
+</div>
 
 <header class="hero">
   <div class="wrap">
@@ -214,8 +267,8 @@
       experiment, not to sell.
     </p>
     <div class="cta">
-      <a class="btn btn-primary" href="./flash/">⚡ Flash your device</a>
-      <a class="btn btn-ghost" href="https://github.com/odudex/Kern" target="_blank" rel="noopener">View source</a>
+      <a class="btn btn-primary" href="./flash/">⚡ Flash the experimental build</a>
+      <a class="btn btn-ghost" href="https://github.com/sandman21vs/Kern/tree/nfc-card-storage" target="_blank" rel="noopener">View fork source</a>
       <a class="btn btn-ghost" href="https://t.me/kern_custody" target="_blank" rel="noopener">Join Telegram</a>
     </div>
   </div>
@@ -342,6 +395,12 @@
     <p class="sub">Full user documentation is not written yet. For now, these live in the repository.</p>
     <div class="grid">
       <div class="card">
+        <h3>📡 NFC card storage (this fork)</h3>
+        <p>What the experiment does, how the reader is wired, and what it
+           costs the air-gap. Read this before flashing.</p>
+        <a class="more" href="https://github.com/sandman21vs/Kern/blob/nfc-card-storage/docs/nfc.md" target="_blank" rel="noopener">Read →</a>
+      </div>
+      <div class="card">
         <h3>📖 README</h3>
         <p>Hardware, prerequisites, building from source, flashing releases and
            SD-card updates.</p>
@@ -378,8 +437,15 @@
         <a class="more" href="https://t.me/kern_custody" target="_blank" rel="noopener">t.me/kern_custody →</a>
       </div>
       <div class="card">
-        <h3>🐙 GitHub</h3>
-        <p>Source, issues and pull requests. Bug reports very welcome.</p>
+        <h3>🧪 This fork</h3>
+        <p>Source and issues for the NFC experiment. Report problems with this
+           build here, not upstream.</p>
+        <a class="more" href="https://github.com/sandman21vs/Kern/tree/nfc-card-storage" target="_blank" rel="noopener">sandman21vs/Kern →</a>
+      </div>
+      <div class="card">
+        <h3>🐙 Official Kern</h3>
+        <p>The upstream project this fork is based on: source, releases and
+           the official web flasher.</p>
         <a class="more" href="https://github.com/odudex/Kern" target="_blank" rel="noopener">odudex/Kern →</a>
       </div>
     </div>
@@ -390,7 +456,8 @@
   <div class="wrap">
     <div class="flinks">
       <a href="./flash/">Web Flasher</a>
-      <a href="https://github.com/odudex/Kern" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/sandman21vs/Kern/tree/nfc-card-storage" target="_blank" rel="noopener">Fork on GitHub</a>
+      <a href="https://github.com/odudex/Kern" target="_blank" rel="noopener">Official Kern</a>
       <a href="https://t.me/kern_custody" target="_blank" rel="noopener">Telegram</a>
       <a href="https://github.com/odudex/Kern/releases" target="_blank" rel="noopener">Releases</a>
       <a href="https://github.com/odudex/Kern/blob/master/LICENSE" target="_blank" rel="noopener">MIT License</a>
@@ -399,7 +466,7 @@
       <span class="maxc">max<b>C</b>malist</span>
       <em>(adj.)</em>: Bitcoin maximalist, written in C.
     </p>
-    <p style="margin-top:0.6rem">Kern is free and open-source research software.</p>
+    <p style="margin-top:0.6rem">Kern is free and open-source research software. This is an unofficial, experimental fork.</p>
   </div>
 </footer>
 
