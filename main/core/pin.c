@@ -273,7 +273,11 @@ pin_verify_result_t pin_verify(const char *pin, size_t len) {
     return PIN_VERIFY_WRONG;
 
   uint8_t fail_cnt = 0;
-  nvs_get_u8(pin_nvs, KEY_FAIL_CNT, &fail_cnt);
+  esp_err_t err = nvs_get_u8(pin_nvs, KEY_FAIL_CNT, &fail_cnt);
+  if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
+    ESP_LOGE(TAG, "Failed to read failure count, aborting PIN check");
+    return PIN_VERIFY_WRONG;
+  }
 
   uint8_t max_fail = PIN_DEFAULT_MAX_FAILURES;
   nvs_get_u8(pin_nvs, KEY_MAX_FAIL, &max_fail);
@@ -282,8 +286,11 @@ pin_verify_result_t pin_verify(const char *pin, size_t len) {
   // Pre-increment failure count and commit before the slow PBKDF2 so that
   // a power-cut during verification cannot gift the attacker a free attempt.
   uint8_t pending_cnt = (fail_cnt < 255) ? fail_cnt + 1 : fail_cnt;
-  nvs_set_u8(pin_nvs, KEY_FAIL_CNT, pending_cnt);
-  nvs_commit(pin_nvs);
+  if (nvs_set_u8(pin_nvs, KEY_FAIL_CNT, pending_cnt) != ESP_OK ||
+      nvs_commit(pin_nvs) != ESP_OK) {
+    ESP_LOGE(TAG, "Failed to persist failure count, aborting PIN check");
+    return PIN_VERIFY_WRONG;
+  }
 
   // Always run PBKDF2 to prevent timing oracle at wipe threshold
   uint8_t salt[PIN_HASH_SIZE];
@@ -313,7 +320,7 @@ pin_verify_result_t pin_verify(const char *pin, size_t len) {
   // Load stored hash
   uint8_t stored_hash[PIN_HASH_SIZE];
   size_t hash_len = PIN_HASH_SIZE;
-  esp_err_t err = nvs_get_blob(pin_nvs, KEY_PIN_HASH, stored_hash, &hash_len);
+  err = nvs_get_blob(pin_nvs, KEY_PIN_HASH, stored_hash, &hash_len);
   if (err != ESP_OK || hash_len != PIN_HASH_SIZE) {
     secure_memzero(attempt_hash, sizeof(attempt_hash));
     secure_memzero(stored_hash, sizeof(stored_hash));
