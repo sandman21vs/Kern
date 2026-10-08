@@ -306,7 +306,7 @@ static void descriptor_validation_cb(descriptor_validation_result_t result,
 
   if (result == VALIDATION_SUCCESS) {
     descriptor_changed = true;
-    refresh_menu_visibility();
+    descriptor_loader_show_loaded_menu(refresh_menu_visibility);
     return;
   }
 
@@ -394,7 +394,7 @@ static void load_descriptor_cb(void) {
 
 /* ---------- Save callbacks ---------- */
 
-/* start_save() picks the page, so this has to unpick the same one: destroying
+/* save_with_format() picks the page, so this has to unpick the same one: destroying
    the other leaves a live container sitting over the manager with no way back
    to it. pending_save_target is read before it is reset for that reason. */
 static void return_from_store_descriptor(void) {
@@ -410,9 +410,9 @@ static void return_from_store_descriptor(void) {
   descriptor_manager_page_show();
 }
 
-/* Both save-type entries do the same thing to a different destination, so the
-   encrypted/plaintext choice is one argument rather than two near-copies. */
-static void start_save(bool encrypted) {
+/* Every save-type entry does the same thing with a different format, so the
+   format is one argument rather than a near-copy per entry. */
+static void save_with_format(storage_descriptor_format_t format) {
   if (save_type_menu) {
     ui_menu_destroy(save_type_menu);
     save_type_menu = NULL;
@@ -429,7 +429,8 @@ static void start_save(bool encrypted) {
 #if CONFIG_KERN_NFC
   if (pending_save_target == SAVE_TARGET_NFC) {
     nfc_store_descriptor_page_create(lv_screen_active(),
-                                     return_from_store_descriptor, encrypted,
+                                     return_from_store_descriptor,
+                                     format == STORAGE_DESCRIPTOR_KEF,
                                      entry->desc);
     nfc_store_descriptor_page_show();
     return;
@@ -438,13 +439,19 @@ static void start_save(bool encrypted) {
 
   store_descriptor_page_create_for_descriptor(
       lv_screen_active(), return_from_store_descriptor, pending_save_location,
-      encrypted, entry->desc);
+      format, entry->desc);
   store_descriptor_page_show();
 }
 
-static void save_encrypted_cb(void) { start_save(true); }
+static void save_kef_cb(void) { save_with_format(STORAGE_DESCRIPTOR_KEF); }
 
-static void save_plaintext_cb(void) { start_save(false); }
+static void save_bip138_cb(void) {
+  save_with_format(STORAGE_DESCRIPTOR_BIP138);
+}
+
+static void save_plaintext_cb(void) {
+  save_with_format(STORAGE_DESCRIPTOR_TXT);
+}
 
 static void save_type_back_cb(void) {
   if (save_type_menu) {
@@ -476,7 +483,13 @@ static void show_save_type_menu(save_target_t target) {
   if (!save_type_menu)
     return;
 
-  ui_menu_add_entry(save_type_menu, "Encrypted (KEF)", save_encrypted_cb);
+  /* On flash, BIP138 is what registering does; offer it as a plain file only
+   * on the SD card. An NFC card holds a KEF envelope or bare text, nothing
+   * else, so it never gets the entry either. */
+  if (target == SAVE_TARGET_SD)
+    ui_menu_add_entry(save_type_menu, "Encrypted (BIP138)", save_bip138_cb);
+  ui_menu_add_entry(save_type_menu, "Encrypted with custom key (KEF)",
+                    save_kef_cb);
   ui_menu_add_entry(save_type_menu, "Plaintext", save_plaintext_cb);
   ui_menu_show(save_type_menu);
 }

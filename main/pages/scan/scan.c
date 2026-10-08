@@ -132,6 +132,11 @@ static void finish_dispatch(char *qr_content, size_t qr_content_len,
     if (message_sign_parse(qr_content, &scan_ctx.message)) {
       scan_ctx.is_message_sign = true;
       parse_success = true;
+    } else if (strncmp(qr_content, "signmessage ", 12) == 0) {
+      dialog_show_error_timeout("Invalid message signing request",
+                                scan_ctx.return_cb, 0);
+      SECURE_FREE_STRING(qr_content);
+      return;
     }
 
     // 2. PSBT (base64)
@@ -451,6 +456,7 @@ static void scan_kef_success_cb(const uint8_t *data, size_t len) {
 void scan_load_content(lv_obj_t *parent, const uint8_t *data, size_t len,
                        const char *save_dir, const char *source_name,
                        void (*return_cb)(void), void (*complete_cb)(void)) {
+  session_cleanup_register(scan_page_destroy);
   if (!parent || !data || len == 0)
     return;
 

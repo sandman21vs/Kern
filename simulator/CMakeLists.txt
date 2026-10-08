@@ -196,6 +196,9 @@ set(APP_CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/core/psbt_parse.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/core/ss_whitelist.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/core/registry.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/core/bip138_crypto.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/core/bip138_keys.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/core/bip138_backup.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/core/descriptor_checksum.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/core/bip32_path.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/core/script_templates.c
@@ -347,11 +350,13 @@ set(QR_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/qr/encoder.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/qr/parser.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/qr/viewer.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../main/qr/export.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../main/qr/scanner.c
 )
 
 file(GLOB KQUIRC_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../components/k_quirc/src/*.c)
 file(GLOB_RECURSE CUR_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../components/cUR/src/*.c)
+file(GLOB BIP138_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../components/bip138/src/*.c)
 
 add_library(lvgl STATIC
     ${LVGL_SOURCES}
@@ -386,6 +391,7 @@ add_executable(kern_simulator
     ${PLATFORM_SIM_SOURCES}
     ${KQUIRC_SOURCES}
     ${CUR_SOURCES}
+    ${BIP138_SOURCES}
 )
 
 # Include paths — order matters: simulator headers shadow ESP-IDF
@@ -403,6 +409,7 @@ target_include_directories(kern_simulator PRIVATE
     # Component headers (for kef.c -> deflate_codec, cUR, k_quirc, video)
     ${CMAKE_CURRENT_SOURCE_DIR}/../components
     ${CMAKE_CURRENT_SOURCE_DIR}/../components/bbqr/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../components/bip138/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../components/deflate_codec/src
     ${CMAKE_CURRENT_SOURCE_DIR}/../components/k_quirc/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../components/k_quirc/src
@@ -493,6 +500,7 @@ add_executable(kern_sim_storage_smoke
 
 target_include_directories(kern_sim_storage_smoke PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/esp_idf_stubs/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../components/bip138/include
     ${CMAKE_CURRENT_SOURCE_DIR}/platform/sd_card_sim/include
     ${CMAKE_CURRENT_SOURCE_DIR}/platform
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -559,4 +567,16 @@ if(NOT APPLE)
     target_link_options(kern_sim_cleanup PRIVATE -Wl,--wrap=strdup -Wl,--wrap=kern_secret_strdup)
     add_test(NAME sensitive_cleanup COMMAND kern_sim_cleanup)
     set_tests_properties(sensitive_cleanup PROPERTIES TIMEOUT 30)
+
+    add_executable(kern_sim_scan_registry
+        tests/scan_registry.c
+        ../components/secure_memory/secure_memory.c
+        $<TARGET_OBJECTS:kern_sim_runtime>)
+    foreach(prop INCLUDE_DIRECTORIES COMPILE_DEFINITIONS COMPILE_OPTIONS LINK_LIBRARIES LINK_OPTIONS)
+        get_target_property(test_${prop} kern_simulator ${prop})
+        set_property(TARGET kern_sim_scan_registry PROPERTY ${prop} "${test_${prop}}")
+    endforeach()
+    target_compile_options(kern_sim_scan_registry PRIVATE -UNDEBUG)
+    add_test(NAME scan_registry COMMAND kern_sim_scan_registry)
+    set_tests_properties(scan_registry PROPERTIES TIMEOUT 30)
 endif()

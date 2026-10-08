@@ -792,80 +792,6 @@ bool psbt_detect_network(const struct wally_psbt *psbt) {
   return false; // Default to mainnet
 }
 
-static bool extract_account_from_keypath(const unsigned char *keypath,
-                                         size_t keypath_len,
-                                         uint32_t *account_out) {
-  if (keypath_len < 16) {
-    return false;
-  }
-
-  uint32_t account;
-  memcpy(&account, keypath + 12, sizeof(uint32_t));
-
-  // Remove hardened bit to get actual account number
-  *account_out = account & 0x7FFFFFFF;
-  return true;
-}
-
-int32_t psbt_detect_account(const struct wally_psbt *psbt) {
-  if (!psbt) {
-    return -1;
-  }
-
-  unsigned char keypath[100];
-  size_t keypath_len, keypaths_size;
-  uint32_t detected_account = 0;
-  bool found = false;
-
-  // Check outputs first (more reliable for change outputs)
-  size_t num_outputs = 0;
-  wally_psbt_get_num_outputs(psbt, &num_outputs);
-
-  for (size_t i = 0; i < num_outputs; i++) {
-    if (wally_psbt_get_output_keypaths_size(psbt, i, &keypaths_size) ==
-            WALLY_OK &&
-        keypaths_size > 0 &&
-        wally_psbt_get_output_keypath(psbt, i, 0, keypath, sizeof(keypath),
-                                      &keypath_len) == WALLY_OK) {
-      uint32_t account;
-      if (extract_account_from_keypath(keypath, keypath_len, &account)) {
-        if (!found) {
-          detected_account = account;
-          found = true;
-        } else if (account != detected_account) {
-          // Inconsistent accounts found
-          return -1;
-        }
-      }
-    }
-  }
-
-  // Check inputs as fallback
-  size_t num_inputs = 0;
-  wally_psbt_get_num_inputs(psbt, &num_inputs);
-
-  for (size_t i = 0; i < num_inputs; i++) {
-    if (wally_psbt_get_input_keypaths_size(psbt, i, &keypaths_size) ==
-            WALLY_OK &&
-        keypaths_size > 0 &&
-        wally_psbt_get_input_keypath(psbt, i, 0, keypath, sizeof(keypath),
-                                     &keypath_len) == WALLY_OK) {
-      uint32_t account;
-      if (extract_account_from_keypath(keypath, keypath_len, &account)) {
-        if (!found) {
-          detected_account = account;
-          found = true;
-        } else if (account != detected_account) {
-          // Inconsistent accounts found
-          return -1;
-        }
-      }
-    }
-  }
-
-  return found ? (int32_t)detected_account : -1;
-}
-
 char *psbt_scriptpubkey_to_address(const unsigned char *script,
                                    size_t script_len, bool is_testnet) {
   return script_template_address_from_spk(script, script_len, is_testnet);
@@ -1152,19 +1078,56 @@ cleanup:
   return signatures_added;
 }
 
+/* A v0 PSBT is trimmed by rebuilding it from its transaction, but that
+ * constructor only produces v0: a v2 one would either export downgraded or be
+ * upgraded back, and the upgrade rewrites the tx-modifiable flags to fully
+ * modifiable, undoing the signer rules applied above. A v2 PSBT also carries
+ * its transaction in its inputs and outputs, sequences and required locktimes
+ * included, where a rebuild could lose a field and with it the txid. So a copy
+ * is trimmed in place, of what weighs: previous transactions, key origins,
+ * scripts the coordinator has and unknown fields. The small fields the v0 path
+ * also drops (sighash type, taproot merkle root, preimages) stay. */
+static struct wally_psbt *psbt_trim_v2(const struct wally_psbt *psbt) {
+  struct wally_psbt *trimmed = NULL;
+  if (wally_psbt_clone_alloc(psbt, 0, &trimmed) != WALLY_OK)
+    return NULL;
+
+  wally_map_clear(&trimmed->global_xpubs);
+  wally_map_clear(&trimmed->unknowns);
+
+  for (size_t i = 0; i < trimmed->num_inputs; i++) {
+    struct wally_psbt_input *in = &trimmed->inputs[i];
+    wally_psbt_input_set_utxo(in, NULL);
+    wally_psbt_input_set_taproot_internal_key(in, NULL, 0);
+    wally_map_clear(&in->keypaths);
+    wally_map_clear(&in->taproot_leaf_hashes);
+    wally_map_clear(&in->taproot_leaf_paths);
+    wally_map_clear(&in->taproot_leaf_scripts);
+    wally_map_clear(&in->unknowns);
+  }
+
+  for (size_t i = 0; i < trimmed->num_outputs; i++) {
+    struct wally_psbt_output *out = &trimmed->outputs[i];
+    wally_psbt_output_set_redeem_script(out, NULL, 0);
+    wally_psbt_output_set_witness_script(out, NULL, 0);
+    wally_psbt_output_set_taproot_internal_key(out, NULL, 0);
+    wally_map_clear(&out->keypaths);
+    wally_map_clear(&out->taproot_leaf_hashes);
+    wally_map_clear(&out->taproot_leaf_paths);
+    wally_map_clear(&out->taproot_tree);
+    wally_map_clear(&out->unknowns);
+  }
+
+  return trimmed;
+}
+
 struct wally_psbt *psbt_trim(const struct wally_psbt *psbt) {
   if (!psbt) {
     return NULL;
   }
 
-  /* The trimmed PSBT is rebuilt from a transaction, and that constructor only
-   * produces v0. Rebuilding a v2 one would mean either exporting it downgraded
-   * or upgrading it back -- and the upgrade path rewrites the tx-modifiable
-   * flags to fully-modifiable, undoing the signer rules applied above. Trim is
-   * only a payload-size optimisation, so decline it and let the caller export
-   * the PSBT as it arrived. */
   if (psbt_is_v2(psbt)) {
-    return NULL;
+    return psbt_trim_v2(psbt);
   }
 
   struct wally_tx *global_tx = psbt_tx_alloc(psbt);
@@ -1231,13 +1194,6 @@ struct wally_psbt *psbt_trim(const struct wally_psbt *psbt) {
         witness_utxo) {
       wally_psbt_set_input_witness_utxo(trimmed, i, witness_utxo);
       wally_tx_output_free(witness_utxo);
-    }
-
-    // Copy non-witness UTXO if present (for legacy inputs)
-    struct wally_tx *utxo = NULL;
-    if (wally_psbt_get_input_utxo_alloc(psbt, i, &utxo) == WALLY_OK && utxo) {
-      wally_psbt_set_input_utxo(trimmed, i, utxo);
-      wally_tx_free(utxo);
     }
 
     // Copy redeem script if present (P2SH)

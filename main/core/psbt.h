@@ -205,12 +205,6 @@ KERN_WARN_UNUSED_RESULT uint32_t psbt_fee_percent(uint64_t fee,
 // Detect network from derivation paths (returns true if testnet)
 KERN_WARN_UNUSED_RESULT bool psbt_detect_network(const struct wally_psbt *psbt);
 
-// Detect account from derivation paths
-// Returns the account number from PSBT derivation paths
-// Returns -1 if no derivation info found or inconsistent accounts
-KERN_WARN_UNUSED_RESULT int32_t
-psbt_detect_account(const struct wally_psbt *psbt);
-
 // Convert scriptPubKey to address string (caller must free)
 KERN_WARN_UNUSED_RESULT char *
 psbt_scriptpubkey_to_address(const unsigned char *script, size_t script_len,
@@ -253,8 +247,12 @@ KERN_WARN_UNUSED_RESULT size_t psbt_sign(struct wally_psbt *psbt,
                                          psbt_sign_policy_t policy,
                                          psbt_sign_result_t *result);
 
-// Create a trimmed PSBT containing only signatures and minimal validation data
+// Create a trimmed PSBT containing only signatures and minimal validation data,
+// in the version it came in
 // Returns new PSBT on success (caller must free), NULL on failure
+// Previous transactions are left out, though they are most of a PSBT's size:
+// they prove the amounts to the signer, and the coordinator that merges this
+// reply still holds the ones it sent.
 KERN_WARN_UNUSED_RESULT struct wally_psbt *
 psbt_trim(const struct wally_psbt *psbt);
 

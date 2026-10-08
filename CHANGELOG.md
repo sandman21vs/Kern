@@ -7,6 +7,32 @@
 - The card record header's type byte is now an allowlist rather than a single accepted value, so a reader names what it can parse and a record of any other type reads exactly as a blank card does — a descriptor card cannot enter the mnemonic loader and a seed card cannot enter the wallet, refused at the header before anything is allocated or decrypted. A type buys a parser and never a permission: what comes off a card still meets the validation the same bytes would meet arriving by QR or SD. The overwrite warning asks the opposite question and accepts any known type, because a seed about to be buried under a descriptor is something to lose whether or not the page doing the burying could read it. Types 3 and 4 are reserved rather than free — the Krux fork writes them, and a card carrying one has a meaning Kern must not reassign later — and all four are pinned byte for byte by golden vectors, which is the only thing in the tree keeping the two firmwares' numbering aligned
 - Sealing a descriptor for a card costs 29 bytes more than writing it in the clear, not fewer. Kern seals with `KEF_V20_GCM_E4`, which does not compress, so the ceiling is a 666-byte descriptor sealed against 695 plaintext — the reverse of the Krux fork, which deflates first. A 2-of-3 fits either way and a taproot miniscript may fit neither; a card that cannot hold it says so before the antenna comes up. `KEF_V21_GCM_Z_E4` would compress and stays readable by both firmwares, but the version is chosen in a page shared with the seed backup, so that change is left for one that can weigh both
 
+## [0.0.20] - 2026-09-23
+
+### Added
+- BIP138 descriptor backups. After a descriptor loads, it can be kept for the session or registered on flash or SD card under a name. Backups are encrypted to the descriptor's own public keys with a seed-derived approval mark, and only approved backups that pass keyed validation are restored. Built on a new pure-C bip138 submodule using PSA crypto
+- Animated QR exports stream their frames instead of caching up to 100, so exports are no longer capped at 100 parts. Non-UR sequences get playback controls (pause, step, jump) and a frame counter with a progress grid
+- A Nix dev shell for host tools (formatting, native tests, simulator)
+- Opt-in scan pipeline profiling: `just scan-prof <board>` logs camera, PPA and decoder timing once a second
+
+### Changed
+- Faster, more reliable QR scanning. The decoder reads its own YUV420 frame cropped to 800 px, no longer limited by the preview size; a frame stays queued for it during the PPA pass, and the preview rate halves while a sequence comes in. On wave_43 the share of captures read rose from 46% to 59%
+- Updated k_quirc: decoding is faster on the ESP32-P4, and dense codes under uneven light read far more reliably
+- Signed PSBT QR exports leave out previous transactions, which coordinators now attach to every input and made the signed QR as heavy as the unsigned one. v2 PSBTs are trimmed too. The SD card export stays whole
+- clang-format is pinned to major 21 on every host, and unused static functions now warn; functions the firmware never calls were removed
+
+### Fixed
+- PIN verification did not abort when the failure count could not be read or persisted, so a failed write left the power-cut free attempt open and a failed read restarted the count from zero
+- Secret buffers left behind: the manual-input mnemonic after handoff to the editor, the compact SeedQR entropy on the stack, and the per-word buffer in `mnemonic_to_seedqr`
+- A BBQr sequence too large to store was only rejected once enough parts had arrived to exceed the cap; its first frame now gives it away, and duplicate parts are skipped
+- Scan progress was not shown for sequences over 100 parts
+- A degenerate grid could hang the QR decoder for about two minutes
+- White dots in the centre of dark modules on the CrowPanel preview, from the SC2336's photographic sharpen stage; it and the Bayer denoise are dropped
+- Slider tracks were invisible on panels, only the knob showed
+- The replace-key prompt stacks the two fingerprints, so the line never wraps mid-fingerprint
+- The address checker opened on the last used source instead of the descriptor the addresses page was showing
+- Scrollbars were drawn over their container's content instead of in its right gutter
+
 ## [0.0.19] - 2026-09-17
 
 ### Added

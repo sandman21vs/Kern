@@ -19,6 +19,26 @@
 #include <time.h>
 #include <unistd.h>
 
+/* --- Critical sections --- */
+
+static pthread_mutex_t s_critical_mutex;
+static pthread_once_t  s_critical_once = PTHREAD_ONCE_INIT;
+
+static void critical_init(void) {
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&s_critical_mutex, &attr);
+    pthread_mutexattr_destroy(&attr);
+}
+
+void sim_critical_enter(void) {
+    pthread_once(&s_critical_once, critical_init);
+    pthread_mutex_lock(&s_critical_mutex);
+}
+
+void sim_critical_exit(void) { pthread_mutex_unlock(&s_critical_mutex); }
+
 /* -------------------------------------------------------------------------- */
 /* Internal helpers                                                            */
 /* -------------------------------------------------------------------------- */
@@ -264,6 +284,18 @@ BaseType_t xQueueSend(QueueHandle_t queue, const void *item, TickType_t timeout)
     memcpy(q->buffer + q->tail * q->item_size, item, q->item_size);
     q->tail = (q->tail + 1) % q->capacity;
     q->count++;
+    pthread_cond_signal(&q->cond_not_empty);
+    pthread_mutex_unlock(&q->mutex);
+    return pdPASS;
+}
+
+BaseType_t xQueueOverwrite(QueueHandle_t queue, const void *item) {
+    queue_impl_t *q = (queue_impl_t *)queue;
+    if (!q || !item || q->capacity != 1) return pdFAIL;
+
+    pthread_mutex_lock(&q->mutex);
+    memcpy(q->buffer, item, q->item_size);
+    q->count = 1;
     pthread_cond_signal(&q->cond_not_empty);
     pthread_mutex_unlock(&q->mutex);
     return pdPASS;

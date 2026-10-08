@@ -24,12 +24,6 @@ static void fingerprint_to_hex(const unsigned char *fp, char *hex_out) {
   }
 }
 
-bool key_init(void) {
-  key_unload();
-  secure_memzero(fingerprint, sizeof(fingerprint));
-  return true;
-}
-
 bool key_is_loaded(void) { return key_loaded; }
 
 bool key_load_from_mnemonic(const char *mnemonic, const char *passphrase,
@@ -97,6 +91,18 @@ void key_unload(void) {
   SECURE_FREE_STRING(stored_mnemonic);
   secure_memzero(fingerprint, sizeof(fingerprint));
   key_loaded = false;
+}
+
+bool key_set_network(bool is_testnet) {
+  if (!key_loaded) {
+    return false;
+  }
+  /* The BIP32 version is the only network-dependent part of the master
+   * key and derived children inherit it, so switching it in place keeps
+   * the loaded key, passphrase included, instead of re-deriving. */
+  master_key->version =
+      is_testnet ? BIP32_VER_TEST_PRIVATE : BIP32_VER_MAIN_PRIVATE;
+  return true;
 }
 
 bool key_get_fingerprint(unsigned char *fingerprint_out) {
@@ -299,5 +305,3 @@ bool key_get_derived_key_components(const uint32_t *path, size_t path_depth,
       master_key, path, path_depth, BIP32_FLAG_KEY_PRIVATE, key_out);
   return (ret == WALLY_OK);
 }
-
-void key_cleanup(void) { key_unload(); }
