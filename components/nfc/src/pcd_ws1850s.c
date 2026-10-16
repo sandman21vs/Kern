@@ -1,6 +1,13 @@
-// WS1850S reader — register access and ISO14443A framing (see pcd_ws1850s.h)
+/*
+ * WS1850S reader (M5Stack RFID Unit 2) — register access and ISO14443A framing
+ *
+ * The WS1850S is register-compatible with the NXP MFRC522 but is not the same
+ * part: notably it does not report the MFRC522's VersionReg values, so
+ * presence is probed by writing a register and reading it back rather than by
+ * matching a version byte.
+ */
 
-#include "pcd_ws1850s.h"
+#include "pcd.h"
 
 #include <string.h>
 
@@ -10,7 +17,7 @@
 #include "freertos/task.h"
 #include "sdkconfig.h"
 
-static const char *TAG = "NFC_PCD";
+static const char *TAG = "NFC_WS1850S";
 
 /* Register map (MFRC522-compatible) */
 #define REG_COMMAND 0x01
@@ -62,6 +69,9 @@ static const char *TAG = "NFC_PCD";
 static i2c_master_dev_handle_t dev = NULL;
 static bool ready = false;
 static bool crypto_on = false;
+
+static void ws_deinit(void);
+static esp_err_t ws_antenna(bool on);
 
 /* ---------- Register access ---------- */
 
@@ -133,13 +143,19 @@ static esp_err_t soft_reset(void) {
   return ESP_ERR_TIMEOUT;
 }
 
-esp_err_t pcd_init(i2c_master_bus_handle_t bus) {
+static esp_err_t ws_init(i2c_master_bus_handle_t bus) {
   if (!bus)
     return ESP_ERR_INVALID_ARG;
   if (ready)
     return ESP_OK;
 
   if (!dev) {
+    /* An address-only probe first: when the reader on the bus is a different
+       module, nothing is written to an address no WS1850S answers. */
+    if (i2c_master_probe(bus, CONFIG_KERN_NFC_I2C_ADDR, I2C_TIMEOUT_MS) !=
+        ESP_OK)
+      return ESP_ERR_NOT_FOUND;
+
     const i2c_device_config_t cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = CONFIG_KERN_NFC_I2C_ADDR,
@@ -155,13 +171,13 @@ esp_err_t pcd_init(i2c_master_bus_handle_t bus) {
   esp_err_t ret = probe();
   if (ret != ESP_OK) {
     ESP_LOGW(TAG, "No reader at 0x%02x", CONFIG_KERN_NFC_I2C_ADDR);
-    pcd_deinit();
+    ws_deinit();
     return ESP_ERR_NOT_FOUND;
   }
 
   ret = soft_reset();
   if (ret != ESP_OK) {
-    pcd_deinit();
+    ws_deinit();
     return ret;
   }
 
@@ -173,13 +189,13 @@ esp_err_t pcd_init(i2c_master_bus_handle_t bus) {
       reg_write(REG_T_RELOAD_L, 0xE8) != ESP_OK ||
       reg_write(REG_TX_ASK, 0x40) != ESP_OK || /* force 100% ASK */
       reg_write(REG_MODE, 0x3D) != ESP_OK) {   /* CRC preset 0x6363 */
-    pcd_deinit();
+    ws_deinit();
     return ESP_FAIL;
   }
 
   /* Come up with the antenna dark; callers energize it deliberately. */
-  if (pcd_antenna(false) != ESP_OK) {
-    pcd_deinit();
+  if (ws_antenna(false) != ESP_OK) {
+    ws_deinit();
     return ESP_FAIL;
   }
 
@@ -188,10 +204,10 @@ esp_err_t pcd_init(i2c_master_bus_handle_t bus) {
   return ESP_OK;
 }
 
-void pcd_deinit(void) {
+static void ws_deinit(void) {
   if (dev) {
     if (ready)
-      (void)pcd_antenna(false);
+      (void)ws_antenna(false);
     (void)i2c_master_bus_rm_device(dev);
     dev = NULL;
   }
@@ -199,9 +215,9 @@ void pcd_deinit(void) {
   crypto_on = false;
 }
 
-bool pcd_is_ready(void) { return ready; }
+static bool ws_is_ready(void) { return ready; }
 
-esp_err_t pcd_antenna(bool on) {
+static esp_err_t ws_antenna(bool on) {
   if (!dev)
     return ESP_ERR_INVALID_STATE;
   return on ? reg_set_bits(REG_TX_CONTROL, 0x03)
@@ -261,7 +277,7 @@ static esp_err_t collect_reply(uint8_t *recv, size_t *recv_len,
   return ESP_OK;
 }
 
-esp_err_t pcd_transceive(const uint8_t *send, size_t send_len,
+static esp_err_t ws_transceive(const uint8_t *send, size_t send_len,
                          uint8_t tx_last_bits, uint8_t *recv, size_t *recv_len,
                          uint8_t *rx_last_bits) {
   if (!ready || !send || send_len == 0 || send_len > PCD_FIFO_SIZE)
@@ -307,41 +323,7 @@ esp_err_t pcd_transceive(const uint8_t *send, size_t send_len,
   return collect_reply(recv, recv_len, rx_last_bits);
 }
 
-esp_err_t pcd_transceive_crc(const uint8_t *send, size_t send_len,
-                             uint8_t *recv, size_t *recv_len) {
-  if (!send || send_len == 0 || send_len + 2 > PCD_FIFO_SIZE)
-    return ESP_ERR_INVALID_ARG;
-  if (!recv || !recv_len || *recv_len < 2)
-    return ESP_ERR_INVALID_ARG;
-
-  uint8_t frame[PCD_FIFO_SIZE];
-  memcpy(frame, send, send_len);
-  esp_err_t ret = pcd_calc_crc(send, send_len, &frame[send_len]);
-  if (ret != ESP_OK)
-    return ret;
-
-  size_t len = *recv_len;
-  ret = pcd_transceive(frame, send_len + 2, 0, recv, &len, NULL);
-  if (ret != ESP_OK)
-    return ret;
-
-  /* A reply carrying a CRC_A is at least three bytes; anything shorter is
-     malformed regardless of what it claims to be. */
-  if (len < 3)
-    return ESP_ERR_INVALID_RESPONSE;
-
-  uint8_t crc[2];
-  ret = pcd_calc_crc(recv, len - 2, crc);
-  if (ret != ESP_OK)
-    return ret;
-  if (crc[0] != recv[len - 2] || crc[1] != recv[len - 1])
-    return ESP_ERR_INVALID_CRC;
-
-  *recv_len = len - 2;
-  return ESP_OK;
-}
-
-esp_err_t pcd_calc_crc(const uint8_t *data, size_t len, uint8_t out[2]) {
+static esp_err_t ws_calc_crc(const uint8_t *data, size_t len, uint8_t out[2]) {
   if (!ready || !data || !out || len == 0 || len > PCD_FIFO_SIZE)
     return ESP_ERR_INVALID_ARG;
 
@@ -379,7 +361,7 @@ esp_err_t pcd_calc_crc(const uint8_t *data, size_t len, uint8_t out[2]) {
 
 /* ---------- MIFARE Classic authentication ---------- */
 
-esp_err_t pcd_mf_authenticate(uint8_t cmd, uint8_t block, const uint8_t key[6],
+static esp_err_t ws_mf_authenticate(uint8_t cmd, uint8_t block, const uint8_t key[6],
                               const uint8_t *uid, uint8_t uid_len) {
   if (!ready || !key || !uid)
     return ESP_ERR_INVALID_ARG;
@@ -431,11 +413,24 @@ esp_err_t pcd_mf_authenticate(uint8_t cmd, uint8_t block, const uint8_t key[6],
   return ESP_OK;
 }
 
-void pcd_stop_crypto(void) {
+static void ws_stop_crypto(void) {
   if (!ready)
     return;
   (void)reg_clear_bits(REG_STATUS2, 0x08);
   crypto_on = false;
 }
 
-bool pcd_crypto_active(void) { return crypto_on; }
+static bool ws_crypto_active(void) { return crypto_on; }
+
+const pcd_driver_t pcd_ws1850s_driver = {
+    .name = "WS1850S",
+    .init = ws_init,
+    .deinit = ws_deinit,
+    .is_ready = ws_is_ready,
+    .antenna = ws_antenna,
+    .transceive = ws_transceive,
+    .calc_crc = ws_calc_crc,
+    .mf_authenticate = ws_mf_authenticate,
+    .stop_crypto = ws_stop_crypto,
+    .crypto_active = ws_crypto_active,
+};

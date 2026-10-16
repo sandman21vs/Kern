@@ -5,8 +5,8 @@
  * envelopes; a wallet descriptor may instead be stored as bare text, at the
  * user's explicit choice, because a descriptor is public data by design.
  *
- * Reader: WS1850S (M5Stack RFID Unit 2) on an I2C bus the caller already
- * owns. The bus handle is passed in rather than opened here, so the component
+ * Reader: WS1850S (M5Stack RFID Unit 2) or PN532, on an I2C bus the caller
+ * already owns; whichever answers is used. The bus handle is passed in rather than opened here, so the component
  * carries no board dependency: every Kern BSP exposes bsp_i2c_get_handle().
  *
  * Tags: MIFARE Classic 1K/4K and Ultralight/NTAG21x. Callers never see the
@@ -72,9 +72,13 @@ typedef struct {
  * Bind the reader to an initialized I2C bus and put it in a known state.
  * Idempotent. Leaves the RF field off.
  *
- * @return ESP_ERR_NOT_FOUND when no WS1850S answers on the bus.
+ * @return ESP_ERR_NOT_FOUND when no supported reader answers on the bus.
  */
 esp_err_t nfc_init(i2c_master_bus_handle_t bus);
+
+/** Model of the attached reader ("WS1850S", "PN532"), or NULL before
+ *  nfc_init() has succeeded. */
+const char *nfc_reader_name(void);
 
 /** Release the reader. Turns the field off first. */
 void nfc_deinit(void);

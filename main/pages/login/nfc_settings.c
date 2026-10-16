@@ -12,10 +12,11 @@
 #include <bsp/esp-bsp.h>
 #include <lvgl.h>
 #include <nfc.h>
+#include <stdio.h>
 
 static const char *NFC_HELP =
-    "Store encrypted seed backups on NFC cards through an external WS1850S "
-    "reader.\n\nThe reader is a radio. While this is off the firmware never "
+    "Store encrypted seed backups on NFC cards through an external reader: "
+    "M5Stack RFID Unit 2 or a PN532 module, on the I2C bus.\n\nThe reader is a radio. While this is off the firmware never "
     "touches it, even with the module plugged in -- no bus access, no power "
     "to the antenna. While it is on, the antenna still only comes up inside "
     "a card page, and only the encrypted backup crosses it, never the seed "
@@ -57,10 +58,12 @@ static void test_reader_cb(lv_event_t *e) {
 
   esp_err_t ret = nfc_init(bsp_i2c_get_handle());
   if (ret == ESP_OK) {
+    char msg[48];
+    const char *name = nfc_reader_name();
+    snprintf(msg, sizeof(msg), "Reader detected: %s.", name ? name : "?");
     /* Leave nothing attached: the probe is a one-off, not a session. */
     nfc_deinit();
-    dialog_show_info("NFC", "Reader detected.", NULL, NULL,
-                     DIALOG_STYLE_OVERLAY);
+    dialog_show_info("NFC", msg, NULL, NULL, DIALOG_STYLE_OVERLAY);
   } else {
     dialog_show_error_timeout("No reader on the I2C bus", NULL, 0);
   }

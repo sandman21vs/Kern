@@ -7,7 +7,7 @@
 
 #include "esp_log.h"
 #include "nfc_record.h"
-#include "pcd_ws1850s.h"
+#include "pcd.h"
 #include "picc.h"
 
 static const char *TAG = "NFC";
@@ -62,6 +62,8 @@ void nfc_deinit(void) {
 }
 
 bool nfc_is_ready(void) { return pcd_is_ready(); }
+
+const char *nfc_reader_name(void) { return pcd_name(); }
 
 esp_err_t nfc_field_set(bool on) {
   if (!pcd_is_ready())
