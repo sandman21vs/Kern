@@ -6,7 +6,9 @@ Kern is a research and development project exploring new hardware and Bitcoin se
 
 ## Getting Started
 
-1. Fork the repository and clone it locally.
+> **This fork:** changes to the NFC experiment go to [sandman21vs/Kern](https://github.com/sandman21vs/Kern/tree/nfc-card-storage), against the `nfc-card-storage` branch. The fork's `master` mirrors upstream and takes no fork-only changes. Everything else belongs upstream at [odudex/Kern](https://github.com/odudex/Kern).
+
+1. Fork the repository and clone it locally (for this fork: `git clone --recursive -b nfc-card-storage https://github.com/sandman21vs/Kern.git`).
 2. Initialize submodules: `git submodule update --init --recursive`
 3. Set up ESP-IDF v6.1 and source the environment: `source ~/esp/esp-idf/export.sh`
 4. Build the project: `idf.py build` (or `just build`)

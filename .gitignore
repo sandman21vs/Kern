@@ -36,6 +36,7 @@ components/secure_memory/test/test_secret_alloc
 components/bbqr/test/test_bbqr
 components/bbqr/test/test_base32
 components/deflate_codec/test/test_deflate_codec
+components/nfc/test/test_nfc_record
 main/qr/test/test_parser
 main/qr/test/test_progress
 main/qr/test/test_yuv420

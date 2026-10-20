@@ -66,6 +66,7 @@ clean:
     rm -rf simulator/build
     make -C components/bbqr/test clean
     make -C components/secure_memory/test clean
+    make -C components/nfc/test clean
     make -C components/bip138 clean
     make -C main/qr/test clean
     rm -rf components/k_quirc/test/build

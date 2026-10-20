@@ -3,8 +3,13 @@
 #include "descriptor_manager.h"
 #include "../../core/descriptor_checksum.h"
 #include "../../core/registry.h"
+#include "../../core/settings.h"
 #include "../../core/storage.h"
 #include "../../core/wallet.h"
+#if CONFIG_KERN_NFC
+#include "../nfc/nfc_load_descriptor.h"
+#include "../nfc/nfc_store_descriptor.h"
+#endif
 #include "../../qr/encoder.h"
 #include "../../qr/scanner.h"
 #include "../../ui/dialog.h"
@@ -57,6 +62,16 @@ static int current_part_index = 0;
 
 /* Save type selection menu */
 static ui_menu_t *save_type_menu = NULL;
+/* A card is not a storage_location_t — it has no file list and no filename —
+ * so the save destination is tracked separately and pending_save_location only
+ * means anything on the flash and SD branches. */
+typedef enum {
+  SAVE_TARGET_FLASH,
+  SAVE_TARGET_SD,
+  SAVE_TARGET_NFC,
+} save_target_t;
+
+static save_target_t pending_save_target = SAVE_TARGET_FLASH;
 static storage_location_t pending_save_location;
 static int pending_save_descriptor_index = -1;
 
@@ -344,20 +359,59 @@ static void load_source_back_cb(void) {
   descriptor_loader_destroy_source_menu();
 }
 
+#if CONFIG_KERN_NFC
+static void return_from_load_nfc(void) {
+  nfc_load_descriptor_page_destroy();
+  descriptor_manager_page_show();
+}
+
+static void success_from_load_nfc(void) {
+  nfc_load_descriptor_page_destroy();
+  descriptor_changed = true;
+  descriptor_manager_page_show();
+  refresh_menu_visibility();
+}
+
+static void load_from_nfc_cb(void) {
+  descriptor_loader_destroy_source_menu();
+  descriptor_manager_page_hide();
+  nfc_load_descriptor_page_create(lv_screen_active(), return_from_load_nfc,
+                                  success_from_load_nfc);
+  nfc_load_descriptor_page_show();
+}
+#endif
+
 static void load_descriptor_cb(void) {
+  void (*nfc_cb)(void) = NULL;
+#if CONFIG_KERN_NFC
+  if (settings_get_nfc_enabled())
+    nfc_cb = load_from_nfc_cb;
+#endif
   descriptor_loader_show_source_menu(manager_screen, load_from_qr_cb,
                                      load_from_flash_cb, load_from_sd_cb,
-                                     load_source_back_cb);
+                                     nfc_cb, load_source_back_cb);
 }
 
 /* ---------- Save callbacks ---------- */
 
+/* save_with_format() picks the page, so this has to unpick the same one: destroying
+   the other leaves a live container sitting over the manager with no way back
+   to it. pending_save_target is read before it is reset for that reason. */
 static void return_from_store_descriptor(void) {
-  store_descriptor_page_destroy();
+#if CONFIG_KERN_NFC
+  if (pending_save_target == SAVE_TARGET_NFC)
+    nfc_store_descriptor_page_destroy();
+  else
+#endif
+    store_descriptor_page_destroy();
+
+  pending_save_target = SAVE_TARGET_FLASH;
   pending_save_descriptor_index = -1;
   descriptor_manager_page_show();
 }
 
+/* Every save-type entry does the same thing with a different format, so the
+   format is one argument rather than a near-copy per entry. */
 static void save_with_format(storage_descriptor_format_t format) {
   if (save_type_menu) {
     ui_menu_destroy(save_type_menu);
@@ -371,6 +425,18 @@ static void save_with_format(storage_descriptor_format_t format) {
     return;
   }
   descriptor_manager_page_hide();
+
+#if CONFIG_KERN_NFC
+  if (pending_save_target == SAVE_TARGET_NFC) {
+    nfc_store_descriptor_page_create(lv_screen_active(),
+                                     return_from_store_descriptor,
+                                     format == STORAGE_DESCRIPTOR_KEF,
+                                     entry->desc);
+    nfc_store_descriptor_page_show();
+    return;
+  }
+#endif
+
   store_descriptor_page_create_for_descriptor(
       lv_screen_active(), return_from_store_descriptor, pending_save_location,
       format, entry->desc);
@@ -395,18 +461,32 @@ static void save_type_back_cb(void) {
   pending_save_descriptor_index = -1;
 }
 
-static void show_save_type_menu(storage_location_t loc) {
-  pending_save_location = loc;
-  const char *title =
-      (loc == STORAGE_FLASH) ? "Save to Flash" : "Save to SD Card";
+/*
+ * Encrypted-vs-plaintext is asked before the antenna comes up, and on purpose.
+ * The rule that an NFC menu entry goes straight to the tap page is about
+ * confirmation — presenting the card is the confirmation. This is not a
+ * confirmation; it is the same format choice flash and SD already offer, and
+ * answering it first is what keeps the reader off until there is something to
+ * write.
+ */
+static void show_save_type_menu(save_target_t target) {
+  pending_save_target = target;
+  if (target != SAVE_TARGET_NFC)
+    pending_save_location =
+        (target == SAVE_TARGET_FLASH) ? STORAGE_FLASH : STORAGE_SD;
+
+  const char *title = (target == SAVE_TARGET_FLASH) ? "Save to Flash"
+                      : (target == SAVE_TARGET_SD)  ? "Save to SD Card"
+                                                    : "Save to NFC Card";
 
   save_type_menu = ui_menu_create(manager_screen, title, save_type_back_cb);
   if (!save_type_menu)
     return;
 
   /* On flash, BIP138 is what registering does; offer it as a plain file only
-   * on the card. */
-  if (loc == STORAGE_SD)
+   * on the SD card. An NFC card holds a KEF envelope or bare text, nothing
+   * else, so it never gets the entry either. */
+  if (target == SAVE_TARGET_SD)
     ui_menu_add_entry(save_type_menu, "Encrypted (BIP138)", save_bip138_cb);
   ui_menu_add_entry(save_type_menu, "Encrypted with custom key (KEF)",
                     save_kef_cb);
@@ -452,12 +532,21 @@ static void registered_desc_action_cb(size_t index,
   case REGISTERED_DESCRIPTOR_ACTION_SAVE_FLASH:
     pending_save_descriptor_index = (int)index;
     descriptor_manager_page_show();
-    show_save_type_menu(STORAGE_FLASH);
+    show_save_type_menu(SAVE_TARGET_FLASH);
     break;
   case REGISTERED_DESCRIPTOR_ACTION_SAVE_SD:
     pending_save_descriptor_index = (int)index;
     descriptor_manager_page_show();
-    show_save_type_menu(STORAGE_SD);
+    show_save_type_menu(SAVE_TARGET_SD);
+    break;
+  case REGISTERED_DESCRIPTOR_ACTION_SAVE_NFC:
+    /* The case is unconditional — this switch has no default, so an
+       enumerator left uncovered is a warning — but the body is not. */
+#if CONFIG_KERN_NFC
+    pending_save_descriptor_index = (int)index;
+    descriptor_manager_page_show();
+    show_save_type_menu(SAVE_TARGET_NFC);
+#endif
     break;
   }
 }

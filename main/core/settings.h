@@ -56,6 +56,8 @@ KERN_WARN_UNUSED_RESULT bool settings_get_partial_signing(void);
 esp_err_t settings_set_partial_signing(bool partial);
 KERN_WARN_UNUSED_RESULT bool settings_get_expected_owned_signing(void);
 esp_err_t settings_set_expected_owned_signing(bool enabled);
+KERN_WARN_UNUSED_RESULT bool settings_get_nfc_enabled(void);
+esp_err_t settings_set_nfc_enabled(bool enabled);
 KERN_WARN_UNUSED_RESULT uint16_t settings_get_screensaver_timeout(void);
 esp_err_t settings_set_screensaver_timeout(uint16_t sec);
 KERN_WARN_UNUSED_RESULT uint16_t settings_get_session_timeout(void);
