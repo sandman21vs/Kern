@@ -12,7 +12,7 @@
 > [!CAUTION]
 > # ⚠ Experimental fork, not official Kern
 >
-> **This is [sandman21vs/Kern](https://github.com/sandman21vs/Kern/tree/nfc-card-storage), an unofficial fork of [odudex/Kern](https://github.com/odudex/Kern) used as a proof-of-concept test of NFC card storage:** KEF-encrypted seed backups and wallet descriptors written to NFC cards through an external M5Stack RFID Unit 2. See [docs/nfc.md](docs/nfc.md).
+> **This is [sandman21vs/Kern](https://github.com/sandman21vs/Kern/tree/nfc-card-storage), an unofficial fork of [odudex/Kern](https://github.com/odudex/Kern) used as a proof-of-concept test of NFC card storage:** KEF-encrypted seed backups and wallet descriptors written to NFC cards through an external M5Stack RFID Unit 2 or a PN532 module. See [docs/nfc.md](docs/nfc.md).
 >
 > - **Do not use it with real seeds or real funds.** Testnet and throwaway keys only.
 > - **Not reviewed or endorsed by the Kern maintainers**, never audited, and tested on one board with one card type.

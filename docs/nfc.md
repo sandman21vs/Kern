@@ -18,8 +18,8 @@
 > for what anyone else does with it.
 
 Keeps KEF-encrypted seed backups and wallet output descriptors on NFC cards,
-read and written through an external M5Stack RFID Unit 2 (WS1850S) on the
-board's I2C bus. The card is a third destination alongside flash and SD: same
+read and written through an external reader on the board's I2C bus — an
+M5Stack RFID Unit 2 (WS1850S) or a PN532 module, whichever is plugged in. The card is a third destination alongside flash and SD: same
 envelope, same password prompt, different medium.
 
 **Off by default.** The driver is compiled in, but nothing happens until the
@@ -72,6 +72,30 @@ Supply is **3.3 V**, not the 5 V the Grove connector is nominally rated for.
 The WS1850S is a 3.3 V part and the P4's logic is 3.3 V, so the whole link runs
 at one level. Read range at the lower supply has not been measured — if a card
 reads unreliably, suspect the supply first.
+
+### PN532 instead
+
+The red **PN532 NFC RFID V3** board (Elechouse design and its clones) is the
+cheaper alternative and works on the same four wires, at address `0x24`:
+
+- Set the module's mode switch to **I2C** (on the V3: `SEL0`/channel 1 ON,
+  `SEL1`/channel 2 OFF).
+- Power it from **3.3 V**. Its pull-ups tie SDA and SCL to its own VCC, and
+  that bus is the touch controller's and the camera's.
+
+`nfc_init()` tries the WS1850S at `0x28` first, then the PN532, and uses
+whichever answers; **Settings → NFC → Test reader** names the one it found.
+Each address is probed address-only before anything is written to it.
+
+The PN532 is not an MFRC522 on another bus — there is firmware between host
+and radio. It is used only to pass raw frames (`InCommunicateThru`) and to
+reach the radio's registers (the CIU, which has the MFRC522 map) for last bits
+and crypto1, so selection, MIFARE addressing and every bound on tag input
+stay in `picc.c`, the same code for both readers. The driver is a port of the
+one in the Specter-DIY ESP32-P4 fork, where it was measured on MIFARE Classic
+(records of 1–300 bytes written and read back) and gave a noticeably stronger
+field than the RFID Unit 2. NTAG on the PN532 has only been exercised in
+simulation.
 
 ### Porting
 
@@ -242,7 +266,7 @@ has no use for it.
 A card is input a stranger chose every byte of, and it only has to be held near
 the device. Each layer refuses anything that is not exactly what Kern writes.
 
-**Reader FIFO** (`pcd_ws1850s.c`) — the reply length is picked by the tag.
+**Reader FIFO** (`pcd_ws1850s.c`, `pcd_pn532.c`) — the reply length is picked by the tag.
 Reading `FIFOLevelReg` (up to 64) into a smaller buffer is the classic MFRC522
 overflow, so `pcd_transceive()` takes its buffer size as an in/out parameter and
 aborts with `ESP_ERR_INVALID_SIZE` rather than truncating; truncation would also
@@ -312,7 +336,9 @@ make -C main/core/test run
 ```
 components/nfc/
   include/nfc.h          public API — all that main/ sees
-  src/pcd_ws1850s.c      reader: I2C registers, ISO14443A framing
+  src/pcd.c              reader dispatch: finds the module, raw-frame API
+  src/pcd_ws1850s.c      WS1850S: I2C registers, ISO14443A framing
+  src/pcd_pn532.c        PN532: firmware frames, CIU registers, CRC_A
   src/picc.c             tags: selection, linear addressing
   src/nfc_record.c       header build/parse/validate (pure, host-testable)
   src/nfc.c              record I/O
@@ -359,9 +385,12 @@ argument. Load a card-held descriptor from the Descriptor Manager first.
 
 ## Configuration
 
-`CONFIG_KERN_NFC` (default y) compiles the feature in. `CONFIG_KERN_NFC_I2C_ADDR`
-(default `0x28`) and `CONFIG_KERN_NFC_I2C_TIMEOUT_MS` (default 100) are under
-**NFC Card Storage** in `menuconfig`.
+`CONFIG_KERN_NFC` (default y) compiles the feature in.
+`CONFIG_KERN_NFC_WS1850S` and `CONFIG_KERN_NFC_PN532` (both default y) pick the
+reader backends; `CONFIG_KERN_NFC_I2C_ADDR` (WS1850S, default `0x28`),
+`CONFIG_KERN_NFC_PN532_I2C_ADDR` (default `0x24`) and
+`CONFIG_KERN_NFC_I2C_TIMEOUT_MS` (default 100) are under **NFC Card Storage** in
+`menuconfig`.
 
 To build without it:
 

@@ -6,7 +6,7 @@
 
 #include "esp_log.h"
 #include "nfc_record.h"
-#include "pcd_ws1850s.h"
+#include "pcd.h"
 
 static const char *TAG = "NFC_PICC";
 
